@@ -1,0 +1,86 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: 'DynamoDB table for queue experience data'
+
+Parameters:
+  Environment:
+    Type: String
+    Default: dev
+    AllowedValues: [dev, stg, prod]
+    Description: Environment name
+
+  Region:
+    Type: String
+    Default: us-east-1
+    Description: AWS region for deployment
+
+  Client:
+    Type: String
+    Default: gen-client5
+    Description: Client name
+
+  CostCenter:
+    Type: String
+    Default: '1003'
+    Description: Cost center for billing tags
+
+Resources:
+  QueueExperienceTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: !Sub 'queue-experience-db-${Client}-${Region}-${Environment}'
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: contactId
+          AttributeType: S
+        - AttributeName: channel
+          AttributeType: S
+        - AttributeName: queueName
+          AttributeType: S
+        - AttributeName: timestamp
+          AttributeType: S
+      KeySchema:
+        - AttributeName: contactId
+          KeyType: HASH
+      GlobalSecondaryIndexes:
+        - IndexName: QueueNameIndex
+          KeySchema:
+            - AttributeName: queueName
+              KeyType: HASH
+          Projection:
+            ProjectionType: ALL
+        - IndexName: TimestampIndex
+          KeySchema:
+            - AttributeName: timestamp
+              KeyType: HASH
+          Projection:
+            ProjectionType: ALL
+        - IndexName: ChannelIndex
+          KeySchema:
+            - AttributeName: channel
+              KeyType: HASH
+          Projection:
+            ProjectionType: ALL
+      Tags:
+        - Key: Name
+          Value: !Sub 'queue-experience-db-${Client}-${Region}-${Environment}'
+        - Key: environment
+          Value: !Ref Environment
+        - Key: costCenter
+          Value: !Ref CostCenter
+        - Key: appService
+          Value: !Ref Client
+        - Key: deployedBy
+          Value: cloudformation
+
+Outputs:
+  QueueExperienceTableName:
+    Description: DynamoDB Table Name for Queue Experience
+    Value: !Ref QueueExperienceTable
+    Export:
+      Name: !Sub '${AWS::StackName}-QueueExperienceTable'
+
+  QueueExperienceTableArn:
+    Description: DynamoDB Table ARN for Queue Experience
+    Value: !GetAtt QueueExperienceTable.Arn
+    Export:
+      Name: !Sub '${AWS::StackName}-QueueExperienceTableArn'

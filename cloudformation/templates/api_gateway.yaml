@@ -1,0 +1,403 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: 'API Gateway for Connect Core with comprehensive endpoint structure'
+
+Parameters:
+  Environment:
+    Type: String
+    Default: dev
+    AllowedValues: [dev, stg, prod]
+    Description: Environment name
+
+  Region:
+    Type: String
+    Default: us-east-1
+    Description: AWS region for deployment
+
+  Client:
+    Type: String
+    Default: gen-client5
+    Description: Client name
+
+  CostCenter:
+    Type: String
+    Default: '1003'
+    Description: Cost center for billing tags
+
+  VPCStackName:
+    Type: String
+    Description: Name of the VPC stack
+
+  VPCEndpointsStackName:
+    Type: String
+    Description: Name of the VPC endpoints stack
+
+  LambdaStackName:
+    Type: String
+    Description: Name of the Lambda stack
+
+Resources:
+  # ====================
+  # MAIN API GATEWAY
+  # ====================
+  ConnectCoreAPI:
+    Type: AWS::ApiGateway::RestApi
+    Properties:
+      Name: !Sub 'connect-core-private-api-${Client}-${Region}-${Environment}'
+      Description: AWS Connect API
+      EndpointConfiguration:
+        Types:
+          - PRIVATE
+        VpcEndpointIds:
+          - Fn::ImportValue: !Sub '${VPCEndpointsStackName}-ContactCenterCoreEndpoint'
+      Tags:
+        - Key: Name
+          Value: !Sub 'connect-core-private-api-${Client}-${Region}-${Environment}'
+        - Key: environment
+          Value: !Ref Environment
+        - Key: costCenter
+          Value: !Ref CostCenter
+        - Key: appService
+          Value: !Ref Client
+        - Key: deployedBy
+          Value: cloudformation
+
+  # ====================
+  # REQUEST VALIDATOR
+  # ====================
+  ConnectCoreAPIValidator:
+    Type: AWS::ApiGateway::RequestValidator
+    Properties:
+      Name: connect-core-private-api
+      RestApiId: !Ref ConnectCoreAPI
+      ValidateRequestBody: true
+      ValidateRequestParameters: true
+
+  # ====================
+  # ROOT LEVEL RESOURCES
+  # ====================
+  JWTAuthorizerResource:
+    Type: AWS::ApiGateway::Resource
+    Properties:
+      RestApiId: !Ref ConnectCoreAPI
+      ParentId: !GetAtt ConnectCoreAPI.RootResourceId
+      PathPart: agent-desktop-jwt-authorizer
+
+  APIResource:
+    Type: AWS::ApiGateway::Resource
+    Properties:
+      RestApiId: !Ref ConnectCoreAPI
+      ParentId: !GetAtt ConnectCoreAPI.RootResourceId
+      PathPart: api
+
+  # ====================
+  # JWT AUTHORIZER ENDPOINT
+  # ====================
+  JWTAuthMethod:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      RestApiId: !Ref ConnectCoreAPI
+      ResourceId: !Ref JWTAuthorizerResource
+      HttpMethod: ANY
+      AuthorizationType: NONE
+      RequestValidatorId: !Ref ConnectCoreAPIValidator
+      Integration:
+        Type: AWS_PROXY
+        IntegrationHttpMethod: POST
+        Uri: !Sub 
+          - 'arn:aws:apigateway:${Region}:lambda:path/2015-03-31/functions/${LambdaArn}/invocations'
+          - LambdaArn:
+              Fn::ImportValue: !Sub '${LambdaStackName}-ContactCenterCoreAPILambdaArn'
+
+  # ====================
+  # API SUB-RESOURCES
+  # ====================
+  CallLogResource:
+    Type: AWS::ApiGateway::Resource
+    Properties:
+      RestApiId: !Ref ConnectCoreAPI
+      ParentId: !Ref APIResource
+      PathPart: calllog
+
+  CTRResource:
+    Type: AWS::ApiGateway::Resource
+    Properties:
+      RestApiId: !Ref ConnectCoreAPI
+      ParentId: !Ref APIResource
+      PathPart: ctr
+
+  DestinationExtensionResource:
+    Type: AWS::ApiGateway::Resource
+    Properties:
+      RestApiId: !Ref ConnectCoreAPI
+      ParentId: !Ref APIResource
+      PathPart: destination-extension
+
+  FraudNumberResource:
+    Type: AWS::ApiGateway::Resource
+    Properties:
+      RestApiId: !Ref ConnectCoreAPI
+      ParentId: !Ref APIResource
+      PathPart: fraudnumber
+
+  PostCallSurveyResource:
+    Type: AWS::ApiGateway::Resource
+    Properties:
+      RestApiId: !Ref ConnectCoreAPI
+      ParentId: !Ref APIResource
+      PathPart: postcallsurvey
+
+  PromptsMessageResource:
+    Type: AWS::ApiGateway::Resource
+    Properties:
+      RestApiId: !Ref ConnectCoreAPI
+      ParentId: !Ref APIResource
+      PathPart: prompts-message
+
+  QueueExperienceResource:
+    Type: AWS::ApiGateway::Resource
+    Properties:
+      RestApiId: !Ref ConnectCoreAPI
+      ParentId: !Ref APIResource
+      PathPart: queue-experience
+
+  SyncResource:
+    Type: AWS::ApiGateway::Resource
+    Properties:
+      RestApiId: !Ref ConnectCoreAPI
+      ParentId: !Ref APIResource
+      PathPart: sync
+
+  VoicemailResource:
+    Type: AWS::ApiGateway::Resource
+    Properties:
+      RestApiId: !Ref ConnectCoreAPI
+      ParentId: !Ref APIResource
+      PathPart: voicemail
+
+  IVRConfigResource:
+    Type: AWS::ApiGateway::Resource
+    Properties:
+      RestApiId: !Ref ConnectCoreAPI
+      ParentId: !Ref APIResource
+      PathPart: ivr-config
+
+  VMPersonalMsgResource:
+    Type: AWS::ApiGateway::Resource
+    Properties:
+      RestApiId: !Ref ConnectCoreAPI
+      ParentId: !Ref APIResource
+      PathPart: vm-personal-msg
+
+  ReconnectResource:
+    Type: AWS::ApiGateway::Resource
+    Properties:
+      RestApiId: !Ref ConnectCoreAPI
+      ParentId: !Ref APIResource
+      PathPart: reconnect
+
+  CloudWatchAlarmResource:
+    Type: AWS::ApiGateway::Resource
+    Properties:
+      RestApiId: !Ref ConnectCoreAPI
+      ParentId: !Ref APIResource
+      PathPart: cloudwatch-alarm
+
+  InsuranceCoreResource:
+    Type: AWS::ApiGateway::Resource
+    Properties:
+      RestApiId: !Ref ConnectCoreAPI
+      ParentId: !Ref APIResource
+      PathPart: insurance-core
+
+  # ====================
+  # CALLLOG ENDPOINTS
+  # ====================
+  GetCallLogsResource:
+    Type: AWS::ApiGateway::Resource
+    Properties:
+      RestApiId: !Ref ConnectCoreAPI
+      ParentId: !Ref CallLogResource
+      PathPart: getcalllogs
+
+  CallLogMethod:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      RestApiId: !Ref ConnectCoreAPI
+      ResourceId: !Ref GetCallLogsResource
+      HttpMethod: POST
+      AuthorizationType: AWS_IAM
+      RequestValidatorId: !Ref ConnectCoreAPIValidator
+      Integration:
+        Type: AWS_PROXY
+        IntegrationHttpMethod: POST
+        Uri: !Sub 
+          - 'arn:aws:apigateway:${Region}:lambda:path/2015-03-31/functions/${LambdaArn}/invocations'
+          - LambdaArn:
+              Fn::ImportValue: !Sub '${LambdaStackName}-ContactCenterCoreAPILambdaArn'
+
+  # ====================
+  # CTR ENDPOINTS
+  # ====================
+  PutCTRResource:
+    Type: AWS::ApiGateway::Resource
+    Properties:
+      RestApiId: !Ref ConnectCoreAPI
+      ParentId: !Ref CTRResource
+      PathPart: putctr
+
+  CTRMethod:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      RestApiId: !Ref ConnectCoreAPI
+      ResourceId: !Ref PutCTRResource
+      HttpMethod: POST
+      AuthorizationType: AWS_IAM
+      RequestValidatorId: !Ref ConnectCoreAPIValidator
+      Integration:
+        Type: AWS_PROXY
+        IntegrationHttpMethod: POST
+        Uri: !Sub 
+          - 'arn:aws:apigateway:${Region}:lambda:path/2015-03-31/functions/${LambdaArn}/invocations'
+          - LambdaArn:
+              Fn::ImportValue: !Sub '${LambdaStackName}-ContactCenterCoreAPILambdaArn'
+
+  # ====================
+  # SYNC ENDPOINT
+  # ====================
+  SyncMethod:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      RestApiId: !Ref ConnectCoreAPI
+      ResourceId: !Ref SyncResource
+      HttpMethod: POST
+      AuthorizationType: AWS_IAM
+      RequestValidatorId: !Ref ConnectCoreAPIValidator
+      Integration:
+        Type: AWS_PROXY
+        IntegrationHttpMethod: POST
+        Uri: !Sub 
+          - 'arn:aws:apigateway:${Region}:lambda:path/2015-03-31/functions/${LambdaArn}/invocations'
+          - LambdaArn:
+              Fn::ImportValue: !Sub '${LambdaStackName}-ContactCenterCoreAPILambdaArn'
+
+  # ====================
+  # INSURANCE CORE ENDPOINTS
+  # ====================
+  GetEventsResource:
+    Type: AWS::ApiGateway::Resource
+    Properties:
+      RestApiId: !Ref ConnectCoreAPI
+      ParentId: !Ref InsuranceCoreResource
+      PathPart: getEvents
+
+  GetEventsMethod:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      RestApiId: !Ref ConnectCoreAPI
+      ResourceId: !Ref GetEventsResource
+      HttpMethod: POST
+      AuthorizationType: NONE
+      RequestValidatorId: !Ref ConnectCoreAPIValidator
+      Integration:
+        Type: AWS_PROXY
+        IntegrationHttpMethod: POST
+        Uri: !Sub 
+          - 'arn:aws:apigateway:${Region}:lambda:path/2015-03-31/functions/${LambdaArn}/invocations'
+          - LambdaArn:
+              Fn::ImportValue: !Sub '${LambdaStackName}-ContactCenterCoreAPILambdaArn'
+
+  GetEventsOptionsMethod:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      RestApiId: !Ref ConnectCoreAPI
+      ResourceId: !Ref GetEventsResource
+      HttpMethod: OPTIONS
+      AuthorizationType: NONE
+      RequestValidatorId: !Ref ConnectCoreAPIValidator
+      Integration:
+        Type: MOCK
+        IntegrationHttpMethod: POST
+        RequestTemplates:
+          application/json: '{"statusCode": 200}'
+
+  GetPolicyDetailsResource:
+    Type: AWS::ApiGateway::Resource
+    Properties:
+      RestApiId: !Ref ConnectCoreAPI
+      ParentId: !Ref InsuranceCoreResource
+      PathPart: getPolicyDetails
+
+  GetPolicyDetailsMethod:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      RestApiId: !Ref ConnectCoreAPI
+      ResourceId: !Ref GetPolicyDetailsResource
+      HttpMethod: GET
+      AuthorizationType: NONE
+      RequestValidatorId: !Ref ConnectCoreAPIValidator
+      RequestParameters:
+        method.request.querystring.policy_or_claim_number: true
+        method.request.querystring.role: true
+      Integration:
+        Type: AWS_PROXY
+        IntegrationHttpMethod: POST
+        Uri: !Sub 
+          - 'arn:aws:apigateway:${Region}:lambda:path/2015-03-31/functions/${LambdaArn}/invocations'
+          - LambdaArn:
+              Fn::ImportValue: !Sub '${LambdaStackName}-ContactCenterCoreAPILambdaArn'
+        RequestParameters:
+          integration.request.querystring.policy_or_claim_number: method.request.querystring.policy_or_claim_number
+          integration.request.querystring.role: method.request.querystring.role
+
+  # ====================
+  # API DEPLOYMENT
+  # ====================
+  ConnectCoreAPIDeployment:
+    Type: AWS::ApiGateway::Deployment
+    DependsOn:
+      - JWTAuthMethod
+      - CallLogMethod
+      - CTRMethod
+      - SyncMethod
+      - GetEventsMethod
+      - GetEventsOptionsMethod
+      - GetPolicyDetailsMethod
+    Properties:
+      RestApiId: !Ref ConnectCoreAPI
+
+  ConnectCoreAPIStage:
+    Type: AWS::ApiGateway::Stage
+    Properties:
+      RestApiId: !Ref ConnectCoreAPI
+      DeploymentId: !Ref ConnectCoreAPIDeployment
+      StageName: !Ref Environment
+      Tags:
+        - Key: Name
+          Value: !Sub 'connect-core-private-api-stage-${Client}-${Region}-${Environment}'
+        - Key: environment
+          Value: !Ref Environment
+        - Key: costCenter
+          Value: !Ref CostCenter
+        - Key: appService
+          Value: !Ref Client
+        - Key: deployedBy
+          Value: cloudformation
+
+Outputs:
+  ConnectCoreAPIId:
+    Description: Connect Core API Gateway ID
+    Value: !Ref ConnectCoreAPI
+    Export:
+      Name: !Sub '${AWS::StackName}-ConnectCoreAPI'
+
+  ConnectCoreAPIRootResourceId:
+    Description: Connect Core API Gateway Root Resource ID
+    Value: !GetAtt ConnectCoreAPI.RootResourceId
+    Export:
+      Name: !Sub '${AWS::StackName}-ConnectCoreAPIRootResource'
+
+  ConnectCoreAPIStageUrl:
+    Description: Connect Core API Gateway Stage URL
+    Value: !Sub 'https://${ConnectCoreAPI}.execute-api.${Region}.amazonaws.com/${Environment}'
+    Export:
+      Name: !Sub '${AWS::StackName}-ConnectCoreAPIStageUrl'

@@ -270,12 +270,56 @@ Resources:
         - Key: DeployedBy
           Value: cloudformation
 
+  # DynamoDB Stack
+  DynamoDBStack:
+    Type: AWS::CloudFormation::Stack
+    DependsOn: VPCStack
+    Properties:
+      TemplateURL: !Sub 'https://${TemplatesBucketName}.s3.amazonaws.com/${TemplatesPrefix}dynamodb.yaml'
+      Parameters:
+        Environment: !Ref Environment
+        Region: !Ref Region
+        Client: !Ref Client
+        CostCenter: !Ref CostCenter
+      Tags:
+        - Key: StackType
+          Value: DynamoDB
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: Client
+          Value: !Ref Client
+        - Key: DeployedBy
+          Value: cloudformation
+
+  # VPC Endpoints Stack
+  VPCEndpointsStack:
+    Type: AWS::CloudFormation::Stack
+    DependsOn: VPCStack
+    Properties:
+      TemplateURL: !Sub 'https://${TemplatesBucketName}.s3.amazonaws.com/${TemplatesPrefix}vpc_endpoints.yaml'
+      Parameters:
+        Environment: !Ref Environment
+        Region: !Ref Region
+        Client: !Ref Client
+        CostCenter: !Ref CostCenter
+        VPCStackName: !Ref VPCStack
+      Tags:
+        - Key: StackType
+          Value: VPCEndpoints
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: Client
+          Value: !Ref Client
+        - Key: DeployedBy
+          Value: cloudformation
+
   # Lambda Stack
   LambdaStack:
     Type: AWS::CloudFormation::Stack
     DependsOn: 
       - IAMStack
       - KinesisStack
+      - DynamoDBStack
     Properties:
       TemplateURL: !Sub 'https://${TemplatesBucketName}.s3.amazonaws.com/${TemplatesPrefix}lambda.yaml'
       Parameters:
@@ -299,7 +343,7 @@ Resources:
         S3BucketRecordings: !GetAtt S3Stack.Outputs.RecordingsAndTranscriptsBucketName
         S3BucketScreenRecordings: !GetAtt S3Stack.Outputs.ScreenRecordingsBucketName
         S3BucketCCenter: !GetAtt S3Stack.Outputs.CCenterBucketName
-        DynamoDBTableName: !Ref DynamoDBTableName
+        DynamoDBTableName: !GetAtt DynamoDBStack.Outputs.QueueExperienceTableName
         ContactFlowId: !Ref ContactFlowId
         ApiGatewayId: !Ref ApiGatewayId
         ApiGatewayStageUrl: !Ref ApiGatewayStageUrl
@@ -312,6 +356,54 @@ Resources:
       Tags:
         - Key: StackType
           Value: Lambda
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: Client
+          Value: !Ref Client
+        - Key: DeployedBy
+          Value: cloudformation
+
+  # API Gateway Stack
+  APIGatewayStack:
+    Type: AWS::CloudFormation::Stack
+    DependsOn: 
+      - VPCEndpointsStack
+      - LambdaStack
+    Properties:
+      TemplateURL: !Sub 'https://${TemplatesBucketName}.s3.amazonaws.com/${TemplatesPrefix}api_gateway.yaml'
+      Parameters:
+        Environment: !Ref Environment
+        Region: !Ref Region
+        Client: !Ref Client
+        CostCenter: !Ref CostCenter
+        VPCStackName: !Ref VPCStack
+        VPCEndpointsStackName: !Ref VPCEndpointsStack
+        LambdaStackName: !Ref LambdaStack
+      Tags:
+        - Key: StackType
+          Value: APIGateway
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: Client
+          Value: !Ref Client
+        - Key: DeployedBy
+          Value: cloudformation
+
+  # EventBridge Stack
+  EventBridgeStack:
+    Type: AWS::CloudFormation::Stack
+    DependsOn: LambdaStack
+    Properties:
+      TemplateURL: !Sub 'https://${TemplatesBucketName}.s3.amazonaws.com/${TemplatesPrefix}event_bridge.yaml'
+      Parameters:
+        Environment: !Ref Environment
+        Region: !Ref Region
+        Client: !Ref Client
+        CostCenter: !Ref CostCenter
+        LambdaStackName: !Ref LambdaStack
+      Tags:
+        - Key: StackType
+          Value: EventBridge
         - Key: Environment
           Value: !Ref Environment
         - Key: Client
@@ -349,6 +441,30 @@ Outputs:
     Value: !Ref LambdaStack
     Export:
       Name: !Sub '${AWS::StackName}-LambdaStack-ID'
+
+  DynamoDBStackId:
+    Description: DynamoDB Stack ID
+    Value: !Ref DynamoDBStack
+    Export:
+      Name: !Sub '${AWS::StackName}-DynamoDBStack-ID'
+
+  VPCEndpointsStackId:
+    Description: VPC Endpoints Stack ID
+    Value: !Ref VPCEndpointsStack
+    Export:
+      Name: !Sub '${AWS::StackName}-VPCEndpointsStack-ID'
+
+  APIGatewayStackId:
+    Description: API Gateway Stack ID
+    Value: !Ref APIGatewayStack
+    Export:
+      Name: !Sub '${AWS::StackName}-APIGatewayStack-ID'
+
+  EventBridgeStackId:
+    Description: EventBridge Stack ID
+    Value: !Ref EventBridgeStack
+    Export:
+      Name: !Sub '${AWS::StackName}-EventBridgeStack-ID'
 
   VPCId:
     Description: VPC ID from VPC Stack

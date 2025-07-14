@@ -1,0 +1,566 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: 'VPC endpoints and security groups for AWS services'
+
+Parameters:
+  Environment:
+    Type: String
+    Default: dev
+    AllowedValues: [dev, stg, prod]
+    Description: Environment name
+
+  Region:
+    Type: String
+    Default: us-east-1
+    Description: AWS region for deployment
+
+  Client:
+    Type: String
+    Default: gen-client5
+    Description: Client name
+
+  CostCenter:
+    Type: String
+    Default: '1003'
+    Description: Cost center for billing tags
+
+  VPCStackName:
+    Type: String
+    Description: Name of the VPC stack
+
+Resources:
+  # ====================
+  # CONTACT CENTER CORE API ENDPOINT
+  # ====================
+  ContactCenterCoreEndpointSG:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupName: !Sub 'contact-center-core-endpoint-sg-${Client}-${Region}-${Environment}'
+      GroupDescription: Allow tcp inbound traffic from vpc endpoint security group
+      VpcId:
+        Fn::ImportValue: !Sub '${VPCStackName}-VPC-ID'
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 443
+          ToPort: 443
+          CidrIp:
+            Fn::ImportValue: !Sub '${VPCStackName}-VPC-CIDR'
+          Description: Allow ingress from vpc endpoint security group
+      SecurityGroupEgress:
+        - IpProtocol: tcp
+          FromPort: 443
+          ToPort: 443
+          CidrIp:
+            Fn::ImportValue: !Sub '${VPCStackName}-VPC-CIDR'
+          Description: Allow egress from vpc endpoint security group
+      Tags:
+        - Key: Name
+          Value: !Sub 'contact-center-core-endpoint-sg-${Client}-${Region}-${Environment}'
+        - Key: environment
+          Value: !Ref Environment
+        - Key: costCenter
+          Value: !Ref CostCenter
+        - Key: appService
+          Value: !Ref Client
+        - Key: deployedBy
+          Value: cloudformation
+
+  ContactCenterCoreAPIEndpoint:
+    Type: AWS::EC2::VPCEndpoint
+    Properties:
+      VpcId:
+        Fn::ImportValue: !Sub '${VPCStackName}-VPC-ID'
+      ServiceName: !Sub 'com.amazonaws.${Region}.execute-api'
+      VpcEndpointType: Interface
+      SecurityGroupIds:
+        - !Ref ContactCenterCoreEndpointSG
+      SubnetIds:
+        - Fn::ImportValue: !Sub '${VPCStackName}-PrivateSubnet1-ID'
+        - Fn::ImportValue: !Sub '${VPCStackName}-PrivateSubnet2-ID'
+        - Fn::ImportValue: !Sub '${VPCStackName}-PrivateSubnet3-ID'
+      PrivateDnsEnabled: true
+
+  # ====================
+  # COMMAND CENTER API ENDPOINT
+  # ====================
+  CommandCenterAPISG:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupName: !Sub 'command-center-api-endpoint-sg-${Client}-${Region}-${Environment}'
+      GroupDescription: Allow tcp inbound traffic from vpc endpoint security group
+      VpcId:
+        Fn::ImportValue: !Sub '${VPCStackName}-VPC-ID'
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 443
+          ToPort: 443
+          CidrIp: 10.0.0.0/8
+          Description: Allow ingress from application load balancer
+      SecurityGroupEgress:
+        - IpProtocol: tcp
+          FromPort: 443
+          ToPort: 443
+          CidrIp:
+            Fn::ImportValue: !Sub '${VPCStackName}-VPC-CIDR'
+          Description: Allow egress from vpc endpoint security group
+      Tags:
+        - Key: Name
+          Value: !Sub 'command-center-api-endpoint-sg-${Client}-${Region}-${Environment}'
+        - Key: environment
+          Value: !Ref Environment
+        - Key: costCenter
+          Value: !Ref CostCenter
+        - Key: appService
+          Value: !Ref Client
+        - Key: deployedBy
+          Value: cloudformation
+
+  CommandCenterAPIEndpoint:
+    Type: AWS::EC2::VPCEndpoint
+    Properties:
+      VpcId:
+        Fn::ImportValue: !Sub '${VPCStackName}-VPC-ID'
+      ServiceName: !Sub 'com.amazonaws.${Region}.execute-api'
+      VpcEndpointType: Interface
+      SecurityGroupIds:
+        - !Ref CommandCenterAPISG
+      SubnetIds:
+        - Fn::ImportValue: !Sub '${VPCStackName}-PrivateSubnet1-ID'
+        - Fn::ImportValue: !Sub '${VPCStackName}-PrivateSubnet2-ID'
+        - Fn::ImportValue: !Sub '${VPCStackName}-PrivateSubnet3-ID'
+      PrivateDnsEnabled: false
+
+  # ====================
+  # S3 ENDPOINT
+  # ====================
+  S3EndpointSG:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupName: !Sub 's3-endpoint-sg-${Client}-${Region}-${Environment}'
+      GroupDescription: Allow tcp inbound traffic from vpc endpoint security group
+      VpcId:
+        Fn::ImportValue: !Sub '${VPCStackName}-VPC-ID'
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 443
+          ToPort: 443
+          CidrIp:
+            Fn::ImportValue: !Sub '${VPCStackName}-VPC-CIDR'
+          Description: Allow HTTPS ingress from VPC
+        - IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
+          CidrIp:
+            Fn::ImportValue: !Sub '${VPCStackName}-VPC-CIDR'
+          Description: Allow HTTP ingress from VPC
+      SecurityGroupEgress:
+        - IpProtocol: tcp
+          FromPort: 443
+          ToPort: 443
+          CidrIp:
+            Fn::ImportValue: !Sub '${VPCStackName}-VPC-CIDR'
+          Description: Allow HTTPS egress to VPC
+        - IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
+          CidrIp:
+            Fn::ImportValue: !Sub '${VPCStackName}-VPC-CIDR'
+          Description: Allow HTTP egress to VPC
+      Tags:
+        - Key: Name
+          Value: !Sub 's3-endpoint-sg-${Client}-${Region}-${Environment}'
+        - Key: environment
+          Value: !Ref Environment
+        - Key: costCenter
+          Value: !Ref CostCenter
+        - Key: appService
+          Value: !Ref Client
+        - Key: deployedBy
+          Value: cloudformation
+
+  S3Endpoint:
+    Type: AWS::EC2::VPCEndpoint
+    Properties:
+      VpcId:
+        Fn::ImportValue: !Sub '${VPCStackName}-VPC-ID'
+      ServiceName: !Sub 'com.amazonaws.${Region}.s3'
+      VpcEndpointType: Interface
+      SecurityGroupIds:
+        - !Ref S3EndpointSG
+      SubnetIds:
+        - Fn::ImportValue: !Sub '${VPCStackName}-PrivateSubnet1-ID'
+        - Fn::ImportValue: !Sub '${VPCStackName}-PrivateSubnet2-ID'
+        - Fn::ImportValue: !Sub '${VPCStackName}-PrivateSubnet3-ID'
+
+  # ====================
+  # SECRETS MANAGER ENDPOINT
+  # ====================
+  SecretsManagerEndpointSG:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupName: !Sub 'secretmanager-endpoint-sg-${Client}-${Region}-${Environment}'
+      GroupDescription: Allow tcp inbound traffic from vpc endpoint security group
+      VpcId:
+        Fn::ImportValue: !Sub '${VPCStackName}-VPC-ID'
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 443
+          ToPort: 443
+          CidrIp:
+            Fn::ImportValue: !Sub '${VPCStackName}-VPC-CIDR'
+          Description: Allow ingress from vpc endpoint security group
+      SecurityGroupEgress:
+        - IpProtocol: tcp
+          FromPort: 443
+          ToPort: 443
+          CidrIp:
+            Fn::ImportValue: !Sub '${VPCStackName}-VPC-CIDR'
+          Description: Allow egress from vpc endpoint security group
+      Tags:
+        - Key: Name
+          Value: !Sub 'secretmanager-endpoint-sg-${Client}-${Region}-${Environment}'
+        - Key: environment
+          Value: !Ref Environment
+        - Key: costCenter
+          Value: !Ref CostCenter
+        - Key: appService
+          Value: !Ref Client
+        - Key: deployedBy
+          Value: cloudformation
+
+  SecretsManagerEndpoint:
+    Type: AWS::EC2::VPCEndpoint
+    Properties:
+      VpcId:
+        Fn::ImportValue: !Sub '${VPCStackName}-VPC-ID'
+      ServiceName: !Sub 'com.amazonaws.${Region}.secretsmanager'
+      VpcEndpointType: Interface
+      SecurityGroupIds:
+        - !Ref SecretsManagerEndpointSG
+      SubnetIds:
+        - Fn::ImportValue: !Sub '${VPCStackName}-PrivateSubnet1-ID'
+        - Fn::ImportValue: !Sub '${VPCStackName}-PrivateSubnet2-ID'
+        - Fn::ImportValue: !Sub '${VPCStackName}-PrivateSubnet3-ID'
+      PrivateDnsEnabled: true
+
+  # ====================
+  # COMPREHEND ENDPOINT
+  # ====================
+  ComprehendEndpointSG:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupName: !Sub 'comprehend-endpoint-sg-${Client}-${Region}-${Environment}'
+      GroupDescription: Allow tcp inbound traffic from vpc endpoint security group
+      VpcId:
+        Fn::ImportValue: !Sub '${VPCStackName}-VPC-ID'
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 443
+          ToPort: 443
+          CidrIp:
+            Fn::ImportValue: !Sub '${VPCStackName}-VPC-CIDR'
+          Description: Allow ingress from vpc endpoint security group
+      SecurityGroupEgress:
+        - IpProtocol: tcp
+          FromPort: 443
+          ToPort: 443
+          CidrIp:
+            Fn::ImportValue: !Sub '${VPCStackName}-VPC-CIDR'
+          Description: Allow egress from vpc endpoint security group
+      Tags:
+        - Key: Name
+          Value: !Sub 'comprehend-endpoint-sg-${Client}-${Region}-${Environment}'
+        - Key: environment
+          Value: !Ref Environment
+        - Key: costCenter
+          Value: !Ref CostCenter
+        - Key: appService
+          Value: !Ref Client
+        - Key: deployedBy
+          Value: cloudformation
+
+  ComprehendEndpoint:
+    Type: AWS::EC2::VPCEndpoint
+    Properties:
+      VpcId:
+        Fn::ImportValue: !Sub '${VPCStackName}-VPC-ID'
+      ServiceName: !Sub 'com.amazonaws.${Region}.comprehend'
+      VpcEndpointType: Interface
+      SecurityGroupIds:
+        - !Ref ContactCenterCoreEndpointSG
+      SubnetIds:
+        - Fn::ImportValue: !Sub '${VPCStackName}-PrivateSubnet1-ID'
+        - Fn::ImportValue: !Sub '${VPCStackName}-PrivateSubnet2-ID'
+      PrivateDnsEnabled: true
+
+  # ====================
+  # TRANSCRIBE ENDPOINT
+  # ====================
+  TranscribeEndpointSG:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupName: !Sub 'transcribe-endpoint-sg-${Client}-${Region}-${Environment}'
+      GroupDescription: Allow tcp inbound traffic from vpc endpoint security group
+      VpcId:
+        Fn::ImportValue: !Sub '${VPCStackName}-VPC-ID'
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 443
+          ToPort: 443
+          CidrIp:
+            Fn::ImportValue: !Sub '${VPCStackName}-VPC-CIDR'
+          Description: Allow ingress from vpc endpoint security group
+      SecurityGroupEgress:
+        - IpProtocol: tcp
+          FromPort: 443
+          ToPort: 443
+          CidrIp:
+            Fn::ImportValue: !Sub '${VPCStackName}-VPC-CIDR'
+          Description: Allow egress from vpc endpoint security group
+      Tags:
+        - Key: Name
+          Value: !Sub 'transcribe-endpoint-sg-${Client}-${Region}-${Environment}'
+        - Key: environment
+          Value: !Ref Environment
+        - Key: costCenter
+          Value: !Ref CostCenter
+        - Key: appService
+          Value: !Ref Client
+        - Key: deployedBy
+          Value: cloudformation
+
+  TranscribeEndpoint:
+    Type: AWS::EC2::VPCEndpoint
+    Properties:
+      VpcId:
+        Fn::ImportValue: !Sub '${VPCStackName}-VPC-ID'
+      ServiceName: !Sub 'com.amazonaws.${Region}.transcribe'
+      VpcEndpointType: Interface
+      SecurityGroupIds:
+        - !Ref ContactCenterCoreEndpointSG
+      SubnetIds:
+        - Fn::ImportValue: !Sub '${VPCStackName}-PrivateSubnet1-ID'
+        - Fn::ImportValue: !Sub '${VPCStackName}-PrivateSubnet2-ID'
+        - Fn::ImportValue: !Sub '${VPCStackName}-PrivateSubnet3-ID'
+      PrivateDnsEnabled: true
+
+  # ====================
+  # AMAZON CONNECT ENDPOINT
+  # ====================
+  AmazonConnectEndpointSG:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupName: !Sub 'amazon-connect-endpoint-sg-${Client}-${Region}-${Environment}'
+      GroupDescription: Allow tcp inbound traffic from vpc endpoint security group
+      VpcId:
+        Fn::ImportValue: !Sub '${VPCStackName}-VPC-ID'
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 443
+          ToPort: 443
+          CidrIp:
+            Fn::ImportValue: !Sub '${VPCStackName}-VPC-CIDR'
+          Description: Allow ingress from vpc endpoint security group
+      SecurityGroupEgress:
+        - IpProtocol: tcp
+          FromPort: 443
+          ToPort: 443
+          CidrIp:
+            Fn::ImportValue: !Sub '${VPCStackName}-VPC-CIDR'
+          Description: Allow egress from vpc endpoint security group
+      Tags:
+        - Key: Name
+          Value: !Sub 'amazon-connect-endpoint-sg-${Client}-${Region}-${Environment}'
+        - Key: environment
+          Value: !Ref Environment
+        - Key: costCenter
+          Value: !Ref CostCenter
+        - Key: appService
+          Value: !Ref Client
+        - Key: deployedBy
+          Value: cloudformation
+
+  AmazonConnectEndpoint:
+    Type: AWS::EC2::VPCEndpoint
+    Properties:
+      VpcId:
+        Fn::ImportValue: !Sub '${VPCStackName}-VPC-ID'
+      ServiceName: !Sub 'com.amazonaws.${Region}.app-integrations'
+      VpcEndpointType: Interface
+      SecurityGroupIds:
+        - !Ref AmazonConnectEndpointSG
+      SubnetIds:
+        - Fn::ImportValue: !Sub '${VPCStackName}-PrivateSubnet1-ID'
+        - Fn::ImportValue: !Sub '${VPCStackName}-PrivateSubnet2-ID'
+        - Fn::ImportValue: !Sub '${VPCStackName}-PrivateSubnet3-ID'
+      PrivateDnsEnabled: true
+
+  # ====================
+  # DYNAMODB ENDPOINT
+  # ====================
+  DynamoDBEndpointSG:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupName: !Sub 'dynamodb-endpoint-sg-${Client}-${Region}-${Environment}'
+      GroupDescription: Allow tcp inbound traffic from vpc endpoint security group
+      VpcId:
+        Fn::ImportValue: !Sub '${VPCStackName}-VPC-ID'
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 443
+          ToPort: 443
+          CidrIp:
+            Fn::ImportValue: !Sub '${VPCStackName}-VPC-CIDR'
+          Description: Allow ingress from default security group
+      SecurityGroupEgress:
+        - IpProtocol: tcp
+          FromPort: 443
+          ToPort: 443
+          CidrIp:
+            Fn::ImportValue: !Sub '${VPCStackName}-VPC-CIDR'
+          Description: Allow egress from vpc endpoint security group
+      Tags:
+        - Key: Name
+          Value: !Sub 'dynamodb-endpoint-sg-${Client}-${Region}-${Environment}'
+        - Key: environment
+          Value: !Ref Environment
+        - Key: costCenter
+          Value: !Ref CostCenter
+        - Key: appService
+          Value: !Ref Client
+        - Key: deployedBy
+          Value: cloudformation
+
+  DynamoDBEndpoint:
+    Type: AWS::EC2::VPCEndpoint
+    Properties:
+      VpcId:
+        Fn::ImportValue: !Sub '${VPCStackName}-VPC-ID'
+      ServiceName: !Sub 'com.amazonaws.${Region}.dynamodb'
+      VpcEndpointType: Interface
+      SecurityGroupIds:
+        - !Ref DynamoDBEndpointSG
+      SubnetIds:
+        - Fn::ImportValue: !Sub '${VPCStackName}-PrivateSubnet1-ID'
+        - Fn::ImportValue: !Sub '${VPCStackName}-PrivateSubnet2-ID'
+        - Fn::ImportValue: !Sub '${VPCStackName}-PrivateSubnet3-ID'
+
+  # ====================
+  # LEX V2 ENDPOINT
+  # ====================
+  LexV2EndpointSG:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupName: !Sub 'lex-v2-endpoint-sg-${Client}-${Region}-${Environment}'
+      GroupDescription: Allow tcp inbound traffic from vpc endpoint security group
+      VpcId:
+        Fn::ImportValue: !Sub '${VPCStackName}-VPC-ID'
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 443
+          ToPort: 443
+          CidrIp:
+            Fn::ImportValue: !Sub '${VPCStackName}-VPC-CIDR'
+          Description: Allow ingress from vpc endpoint security group
+      SecurityGroupEgress:
+        - IpProtocol: tcp
+          FromPort: 443
+          ToPort: 443
+          CidrIp:
+            Fn::ImportValue: !Sub '${VPCStackName}-VPC-CIDR'
+          Description: Allow egress from vpc endpoint security group
+      Tags:
+        - Key: Name
+          Value: !Sub 'lex-v2-endpoint-sg-${Client}-${Region}-${Environment}'
+        - Key: environment
+          Value: !Ref Environment
+        - Key: costCenter
+          Value: !Ref CostCenter
+        - Key: appService
+          Value: !Ref Client
+        - Key: deployedBy
+          Value: cloudformation
+
+  LexV2Endpoint:
+    Type: AWS::EC2::VPCEndpoint
+    Properties:
+      VpcId:
+        Fn::ImportValue: !Sub '${VPCStackName}-VPC-ID'
+      ServiceName: !Sub 'com.amazonaws.${Region}.runtime-v2-lex'
+      VpcEndpointType: Interface
+      SecurityGroupIds:
+        - !Ref LexV2EndpointSG
+      SubnetIds:
+        - Fn::ImportValue: !Sub '${VPCStackName}-PrivateSubnet1-ID'
+        - Fn::ImportValue: !Sub '${VPCStackName}-PrivateSubnet2-ID'
+        - Fn::ImportValue: !Sub '${VPCStackName}-PrivateSubnet3-ID'
+      PrivateDnsEnabled: true
+
+  # ====================
+  # LAMBDA ENDPOINT
+  # ====================
+  LambdaEndpointSG:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupName: !Sub 'lambda-endpoint-sg-${Client}-${Region}-${Environment}'
+      GroupDescription: Allow tcp inbound traffic from vpc endpoint security group
+      VpcId:
+        Fn::ImportValue: !Sub '${VPCStackName}-VPC-ID'
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 443
+          ToPort: 443
+          CidrIp:
+            Fn::ImportValue: !Sub '${VPCStackName}-VPC-CIDR'
+          Description: Allow ingress from vpc endpoint security group
+      SecurityGroupEgress:
+        - IpProtocol: tcp
+          FromPort: 443
+          ToPort: 443
+          CidrIp:
+            Fn::ImportValue: !Sub '${VPCStackName}-VPC-CIDR'
+          Description: Allow egress from vpc endpoint security group
+      Tags:
+        - Key: Name
+          Value: !Sub 'lambda-endpoint-sg-${Client}-${Region}-${Environment}'
+        - Key: environment
+          Value: !Ref Environment
+        - Key: costCenter
+          Value: !Ref CostCenter
+        - Key: appService
+          Value: !Ref Client
+        - Key: deployedBy
+          Value: cloudformation
+
+  LambdaEndpoint:
+    Type: AWS::EC2::VPCEndpoint
+    Properties:
+      VpcId:
+        Fn::ImportValue: !Sub '${VPCStackName}-VPC-ID'
+      ServiceName: !Sub 'com.amazonaws.${Region}.lambda'
+      VpcEndpointType: Interface
+      SecurityGroupIds:
+        - !Ref LambdaEndpointSG
+      SubnetIds:
+        - Fn::ImportValue: !Sub '${VPCStackName}-PrivateSubnet1-ID'
+        - Fn::ImportValue: !Sub '${VPCStackName}-PrivateSubnet2-ID'
+        - Fn::ImportValue: !Sub '${VPCStackName}-PrivateSubnet3-ID'
+      PrivateDnsEnabled: true
+
+Outputs:
+  ContactCenterCoreEndpointId:
+    Description: Contact Center Core API VPC Endpoint ID
+    Value: !Ref ContactCenterCoreAPIEndpoint
+    Export:
+      Name: !Sub '${AWS::StackName}-ContactCenterCoreEndpoint'
+
+  CommandCenterAPIEndpointId:
+    Description: Command Center API VPC Endpoint ID
+    Value: !Ref CommandCenterAPIEndpoint
+    Export:
+      Name: !Sub '${AWS::StackName}-CommandCenterAPIEndpoint'
+
+  S3EndpointId:
+    Description: S3 VPC Endpoint ID
+    Value: !Ref S3Endpoint
+    Export:
+      Name: !Sub '${AWS::StackName}-S3Endpoint'

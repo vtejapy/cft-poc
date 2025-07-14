@@ -29,7 +29,9 @@
     "DynamoDBTableName": "queue-experience-db-gen-client5-us-east-1-dev",
     "ContactFlowId": "your-contact-flow-id",
     "ApiGatewayId": "your-api-gateway-id",
-    "ApiGatewayStageUrl": "https://your-api-gateway.execute-api.us-east-1.amazonaws.com/dev"
+    "ApiGatewayStageUrl": "https://your-api-gateway.execute-api.us-east-1.amazonaws.com/dev",
+    "TemplatesBucketName": "cloudformation-templates-bucket",
+    "TemplatesPrefix": "templates/"
   },
   "Tags": {
     "environment": "dev",
