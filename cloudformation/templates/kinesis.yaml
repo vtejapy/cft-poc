@@ -144,10 +144,13 @@ Resources:
                   - s3:ListBucketMultipartUploads
                   - s3:PutObject
                 Resource:
-                  - Fn::ImportValue: !Sub '${S3StackName}-RecordingsAndTranscriptsBucket'
                   - !Sub 
-                    - '${BucketArn}/*'
-                    - BucketArn:
+                    - 'arn:aws:s3:::${BucketName}'
+                    - BucketName:
+                        Fn::ImportValue: !Sub '${S3StackName}-RecordingsAndTranscriptsBucket'
+                  - !Sub 
+                    - 'arn:aws:s3:::${BucketName}/*'
+                    - BucketName:
                         Fn::ImportValue: !Sub '${S3StackName}-RecordingsAndTranscriptsBucket'
               - Effect: Allow
                 Action:
@@ -186,8 +189,10 @@ Resources:
       DeliveryStreamName: !Sub 'zeta-sparrow-firehose-stream-${Region}-${Environment}'
       DeliveryStreamType: DirectPut
       S3DestinationConfiguration:
-        BucketARN:
-          Fn::ImportValue: !Sub '${S3StackName}-RecordingsAndTranscriptsBucket'
+        BucketARN: !Sub 
+          - 'arn:aws:s3:::${BucketName}'
+          - BucketName:
+              Fn::ImportValue: !Sub '${S3StackName}-RecordingsAndTranscriptsBucket'
         RoleARN: !GetAtt FirehoseDeliveryRole.Arn
         BufferingHints:
           SizeInMBs: 128
@@ -225,8 +230,10 @@ Resources:
   #       KinesisStreamARN: !GetAtt CTRKinesisStream.Arn
   #       RoleARN: !GetAtt FirehoseDeliveryRole.Arn
   #     S3DestinationConfiguration:
-  #       BucketARN:
-  #         Fn::ImportValue: !Sub '${S3StackName}-RecordingsAndTranscriptsBucket'
+  #       BucketARN: !Sub 
+  #         - 'arn:aws:s3:::${BucketName}'
+  #         - BucketName:
+  #             Fn::ImportValue: !Sub '${S3StackName}-RecordingsAndTranscriptsBucket'
   #       RoleARN: !GetAtt FirehoseDeliveryRole.Arn
   #       BufferingHints:
   #         SizeInMBs: 128
@@ -260,8 +267,10 @@ Resources:
   #       KinesisStreamARN: !GetAtt AgentEventKinesisStream.Arn
   #       RoleARN: !GetAtt FirehoseDeliveryRole.Arn
   #     S3DestinationConfiguration:
-  #       BucketARN:
-  #         Fn::ImportValue: !Sub '${S3StackName}-RecordingsAndTranscriptsBucket'
+  #       BucketARN: !Sub 
+  #         - 'arn:aws:s3:::${BucketName}'
+  #         - BucketName:
+  #             Fn::ImportValue: !Sub '${S3StackName}-RecordingsAndTranscriptsBucket'
   #       RoleARN: !GetAtt FirehoseDeliveryRole.Arn
   #       BufferingHints:
   #         SizeInMBs: 128
