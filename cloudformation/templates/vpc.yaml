@@ -28,13 +28,6 @@ Parameters:
     Default: '1003'
     Description: Cost center for billing tags
 
-Mappings:
-  AvailabilityZones:
-    us-east-1:
-      AZ1: us-east-1a
-      AZ2: us-east-1b
-      AZ3: us-east-1c
-
 Resources:
   # VPC
   VPC:
@@ -75,10 +68,10 @@ Resources:
     Properties:
       VpcId: !Ref VPC
       CidrBlock: !Select [10, !Cidr [!Ref VpcCidr, 256, 8]]
-      AvailabilityZone: !FindInMap [AvailabilityZones, !Ref 'AWS::Region', AZ1]
+      AvailabilityZone: !Select [0, !GetAZs '']
       Tags:
         - Key: Name
-          Value: !Sub '${Client}-vpc-${Region}-${Environment}-private-subnet-${AZ1}'
+          Value: !Sub '${Client}-vpc-${Region}-${Environment}-private-subnet-1'
         - Key: environment
           Value: !Ref Environment
         - Key: costCenter
@@ -93,10 +86,10 @@ Resources:
     Properties:
       VpcId: !Ref VPC
       CidrBlock: !Select [11, !Cidr [!Ref VpcCidr, 256, 8]]
-      AvailabilityZone: !FindInMap [AvailabilityZones, !Ref 'AWS::Region', AZ2]
+      AvailabilityZone: !Select [1, !GetAZs '']
       Tags:
         - Key: Name
-          Value: !Sub '${Client}-vpc-${Region}-${Environment}-private-subnet-${AZ2}'
+          Value: !Sub '${Client}-vpc-${Region}-${Environment}-private-subnet-2'
         - Key: environment
           Value: !Ref Environment
         - Key: costCenter
@@ -111,10 +104,10 @@ Resources:
     Properties:
       VpcId: !Ref VPC
       CidrBlock: !Select [12, !Cidr [!Ref VpcCidr, 256, 8]]
-      AvailabilityZone: !FindInMap [AvailabilityZones, !Ref 'AWS::Region', AZ3]
+      AvailabilityZone: !Select [2, !GetAZs '']
       Tags:
         - Key: Name
-          Value: !Sub '${Client}-vpc-${Region}-${Environment}-private-subnet-${AZ3}'
+          Value: !Sub '${Client}-vpc-${Region}-${Environment}-private-subnet-3'
         - Key: environment
           Value: !Ref Environment
         - Key: costCenter
@@ -130,10 +123,10 @@ Resources:
     Properties:
       VpcId: !Ref VPC
       CidrBlock: !Select [20, !Cidr [!Ref VpcCidr, 256, 8]]
-      AvailabilityZone: !FindInMap [AvailabilityZones, !Ref 'AWS::Region', AZ1]
+      AvailabilityZone: !Select [0, !GetAZs '']
       Tags:
         - Key: Name
-          Value: !Sub '${Client}-vpc-${Region}-${Environment}-public-subnet-${AZ1}'
+          Value: !Sub '${Client}-vpc-${Region}-${Environment}-public-subnet-1'
         - Key: environment
           Value: !Ref Environment
         - Key: costCenter
@@ -148,10 +141,10 @@ Resources:
     Properties:
       VpcId: !Ref VPC
       CidrBlock: !Select [21, !Cidr [!Ref VpcCidr, 256, 8]]
-      AvailabilityZone: !FindInMap [AvailabilityZones, !Ref 'AWS::Region', AZ2]
+      AvailabilityZone: !Select [1, !GetAZs '']
       Tags:
         - Key: Name
-          Value: !Sub '${Client}-vpc-${Region}-${Environment}-public-subnet-${AZ2}'
+          Value: !Sub '${Client}-vpc-${Region}-${Environment}-public-subnet-2'
         - Key: environment
           Value: !Ref Environment
         - Key: costCenter
@@ -233,6 +226,12 @@ Resources:
     Type: AWS::EC2::SubnetRouteTableAssociation
     Properties:
       SubnetId: !Ref PublicSubnet1
+      RouteTableId: !Ref PublicRouteTable
+
+  PublicSubnetRouteTableAssociation2:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PublicSubnet2
       RouteTableId: !Ref PublicRouteTable
 
   # VPC Endpoint for S3
