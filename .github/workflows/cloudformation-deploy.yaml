@@ -290,10 +290,13 @@ jobs:
         run: |
           echo "🚀 Deploying CloudFormation stack..."
           
+          # Convert JSON parameters to parameter-overrides format
+          PARAMS=$(cat cloudformation/parameters/${{ needs.setup.outputs.environment }}.json | jq -r '.[] | "\(.ParameterKey)=\(.ParameterValue)"' | paste -sd ' ')
+          
           aws cloudformation deploy \
-            --template-url https://${{ needs.setup.outputs.templates-bucket }}.s3.amazonaws.com/main.yaml \
+            --template-file cloudformation/main.yaml \
             --stack-name ${{ needs.setup.outputs.stack-name }} \
-            --parameter-overrides file://cloudformation/parameters/${{ needs.setup.outputs.environment }}.json \
+            --parameter-overrides $PARAMS TemplatesBucketName=${{ needs.setup.outputs.templates-bucket }} \
             --capabilities CAPABILITY_IAM CAPABILITY_NAMED_IAM \
             --no-fail-on-empty-changeset
           
