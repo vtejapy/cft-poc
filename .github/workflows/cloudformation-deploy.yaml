@@ -195,6 +195,17 @@ jobs:
           
           CHANGESET_NAME="changeset-${{ github.run_id }}-${{ github.run_attempt }}"
           
+          # Test S3 access first
+          echo "🔍 Testing S3 template access..."
+          aws s3 ls s3://${{ needs.setup.outputs.templates-bucket }}/main.yaml
+          
+          # Test template URL accessibility
+          echo "🔍 Testing template URL accessibility..."
+          curl -I https://${{ needs.setup.outputs.templates-bucket }}.s3.amazonaws.com/main.yaml || echo "URL test failed"
+          
+          # Wait a moment for S3 consistency
+          sleep 5
+          
           # Check if stack exists
           if aws cloudformation describe-stacks --stack-name ${{ needs.setup.outputs.stack-name }} 2>/dev/null; then
             STACK_EXISTS=true
@@ -204,12 +215,15 @@ jobs:
             echo "Stack does not exist, creating change set for CREATE..."
           fi
           
-          # Create change set
+          # Create change set using template body instead of template URL
+          echo "🔍 Creating change set with template body..."
+          TEMPLATE_BODY=$(aws s3 cp s3://${{ needs.setup.outputs.templates-bucket }}/main.yaml -)
+          
           if [[ "$STACK_EXISTS" == "true" ]]; then
             aws cloudformation create-change-set \
               --stack-name ${{ needs.setup.outputs.stack-name }} \
               --change-set-name $CHANGESET_NAME \
-              --template-url https://${{ needs.setup.outputs.templates-bucket }}.s3.amazonaws.com/main.yaml \
+              --template-body "$TEMPLATE_BODY" \
               --parameters file://cloudformation/parameters/${{ needs.setup.outputs.environment }}.json \
               --capabilities CAPABILITY_IAM CAPABILITY_NAMED_IAM \
               --change-set-type UPDATE
@@ -217,7 +231,7 @@ jobs:
             aws cloudformation create-change-set \
               --stack-name ${{ needs.setup.outputs.stack-name }} \
               --change-set-name $CHANGESET_NAME \
-              --template-url https://${{ needs.setup.outputs.templates-bucket }}.s3.amazonaws.com/main.yaml \
+              --template-body "$TEMPLATE_BODY" \
               --parameters file://cloudformation/parameters/${{ needs.setup.outputs.environment }}.json \
               --capabilities CAPABILITY_IAM CAPABILITY_NAMED_IAM \
               --change-set-type CREATE
