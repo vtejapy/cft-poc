@@ -179,6 +179,9 @@ jobs:
           echo "📤 Uploading main.yaml..."
           aws s3 cp cloudformation/main.yaml s3://${{ needs.setup.outputs.templates-bucket }}/main.yaml
           
+          # Wait for S3 consistency
+          sleep 3
+          
           echo "✅ Templates uploaded successfully!"
           
           # Verify template URLs are accessible
@@ -189,6 +192,11 @@ jobs:
           # Test main.yaml specifically
           echo "🔍 Testing main.yaml specifically..."
           aws s3 ls s3://${{ needs.setup.outputs.templates-bucket }}/main.yaml
+          
+          # Test nested template URLs
+          echo "🔍 Testing nested template URLs..."
+          curl -I "https://${{ needs.setup.outputs.templates-bucket }}.s3.amazonaws.com/templates/vpc.yaml" || echo "VPC template URL failed"
+          curl -I "https://${{ needs.setup.outputs.templates-bucket }}.s3.amazonaws.com/templates/s3.yaml" || echo "S3 template URL failed"
 
   change-preview:
     runs-on: ubuntu-latest
@@ -392,14 +400,24 @@ jobs:
           # Convert JSON parameters to parameter-overrides format
           PARAMS=$(cat cloudformation/parameters/${{ needs.setup.outputs.environment }}.json | jq -r '.[] | "\(.ParameterKey)=\(.ParameterValue)"' | paste -sd ' ')
           
-          aws cloudformation deploy \
+          echo "📋 Parameters being passed:"
+          echo "$PARAMS TemplatesBucketName=${{ needs.setup.outputs.templates-bucket }}"
+          
+          if aws cloudformation deploy \
             --template-file cloudformation/main.yaml \
             --stack-name ${{ needs.setup.outputs.stack-name }} \
             --parameter-overrides $PARAMS TemplatesBucketName=${{ needs.setup.outputs.templates-bucket }} \
             --capabilities CAPABILITY_IAM CAPABILITY_NAMED_IAM \
-            --no-fail-on-empty-changeset
-          
-          echo "✅ Stack deployment completed successfully!"
+            --no-fail-on-empty-changeset; then
+            echo "✅ Stack deployment completed successfully!"
+          else
+            echo "❌ Stack deployment failed!"
+            echo "📋 Getting stack events for debugging..."
+            aws cloudformation describe-stack-events --stack-name ${{ needs.setup.outputs.stack-name }} --max-items 20 --output table || true
+            echo "📋 Getting stack status..."
+            aws cloudformation describe-stacks --stack-name ${{ needs.setup.outputs.stack-name }} --query 'Stacks[0].{Status:StackStatus,Reason:StackStatusReason}' --output table || true
+            exit 1
+          fi
 
       - name: Display stack outputs
         run: |
