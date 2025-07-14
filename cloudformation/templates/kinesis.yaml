@@ -1,0 +1,341 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: 'Kinesis streams and Firehose delivery stream for data streaming'
+
+Parameters:
+  Environment:
+    Type: String
+    Default: dev
+    AllowedValues: [dev, stg, prod]
+    Description: Environment name
+
+  Region:
+    Type: String
+    Default: us-east-1
+    Description: AWS region for deployment
+
+  Client:
+    Type: String
+    Default: gen-client5
+    Description: Client name
+
+  CostCenter:
+    Type: String
+    Default: '1003'
+    Description: Cost center for billing tags
+
+  ShardCount:
+    Type: Number
+    Default: 1
+    Description: Number of shards for Kinesis streams
+
+  RetentionPeriod:
+    Type: Number
+    Default: 24
+    Description: Data retention period in hours
+
+  S3StackName:
+    Type: String
+    Description: Name of the S3 stack for Firehose bucket
+
+Resources:
+  # ====================
+  # KINESIS STREAMS
+  # ====================
+  
+  # PRIMARY KINESIS STREAM - Queue Experience Stream
+  QueueExperienceKinesisStream:
+    Type: AWS::Kinesis::Stream
+    Properties:
+      Name: !Sub 'queue-exp-kinesis-stream-${Client}-${Region}-${Environment}'
+      ShardCount: 2
+      RetentionPeriodHours: 48
+      StreamEncryption:
+        EncryptionType: KMS
+        KeyId: alias/aws/kinesis
+      StreamModeDetails:
+        StreamMode: PROVISIONED
+      Tags:
+        - Key: Name
+          Value: !Sub 'queue-exp-kinesis-stream-${Client}-${Region}-${Environment}'
+        - Key: environment
+          Value: !Ref Environment
+        - Key: costCenter
+          Value: !Ref CostCenter
+        - Key: appService
+          Value: !Ref Client
+        - Key: deployedBy
+          Value: cloudformation
+
+  # CTR Kinesis Stream
+  CTRKinesisStream:
+    Type: AWS::Kinesis::Stream
+    Properties:
+      Name: !Sub 'CTR-kinesis-streams-${Client}-${Region}-${Environment}'
+      ShardCount: !Ref ShardCount
+      RetentionPeriodHours: !Ref RetentionPeriod
+      StreamEncryption:
+        EncryptionType: KMS
+        KeyId: alias/aws/kinesis
+      StreamModeDetails:
+        StreamMode: PROVISIONED
+      Tags:
+        - Key: Name
+          Value: !Sub 'CTR-kinesis-streams-${Client}-${Region}-${Environment}'
+        - Key: environment
+          Value: !Ref Environment
+        - Key: costCenter
+          Value: !Ref CostCenter
+        - Key: appService
+          Value: !Ref Client
+        - Key: deployedBy
+          Value: cloudformation
+
+  # Agent Event Kinesis Stream
+  AgentEventKinesisStream:
+    Type: AWS::Kinesis::Stream
+    Properties:
+      Name: !Sub 'agent-event-kinesis-streams-${Client}-${Region}-${Environment}'
+      ShardCount: !Ref ShardCount
+      RetentionPeriodHours: !Ref RetentionPeriod
+      StreamEncryption:
+        EncryptionType: KMS
+        KeyId: alias/aws/kinesis
+      StreamModeDetails:
+        StreamMode: PROVISIONED
+      Tags:
+        - Key: Name
+          Value: !Sub 'agent-event-kinesis-streams-${Client}-${Region}-${Environment}'
+        - Key: environment
+          Value: !Ref Environment
+        - Key: costCenter
+          Value: !Ref CostCenter
+        - Key: appService
+          Value: !Ref Client
+        - Key: deployedBy
+          Value: cloudformation
+
+  # ====================
+  # FIREHOSE DELIVERY STREAM COMPONENTS
+  # ====================
+  
+  # IAM Role for Kinesis Firehose
+  FirehoseDeliveryRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub 'zeta-sparrow-firehose-delivery-role-${Region}-${Environment}'
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: firehose.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: FirehoseS3Policy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - s3:AbortMultipartUpload
+                  - s3:GetBucketLocation
+                  - s3:GetObject
+                  - s3:ListBucket
+                  - s3:ListBucketMultipartUploads
+                  - s3:PutObject
+                Resource:
+                  - Fn::ImportValue: !Sub '${S3StackName}-RecordingsAndTranscriptsBucket'
+                  - !Sub 
+                    - '${BucketArn}/*'
+                    - BucketArn:
+                        Fn::ImportValue: !Sub '${S3StackName}-RecordingsAndTranscriptsBucket'
+              - Effect: Allow
+                Action:
+                  - logs:PutLogEvents
+                Resource: !GetAtt FirehoseLogStream.Arn
+      Tags:
+        - Key: Name
+          Value: !Sub 'zeta-sparrow-firehose-delivery-role-${Region}-${Environment}'
+        - Key: environment
+          Value: !Ref Environment
+        - Key: costCenter
+          Value: !Ref CostCenter
+        - Key: appService
+          Value: !Ref Client
+        - Key: deployedBy
+          Value: cloudformation
+
+  # CloudWatch Log Group for Firehose
+  FirehoseLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: /aws/kinesisfirehose/zeta-sparrow-firehose-stream
+      RetentionInDays: 7
+
+  # CloudWatch Log Stream for Firehose
+  FirehoseLogStream:
+    Type: AWS::Logs::LogStream
+    Properties:
+      LogGroupName: !Ref FirehoseLogGroup
+      LogStreamName: !Sub 'zeta-sparrow-S3Delivery-${Region}-${Environment}'
+
+  # Kinesis Firehose Delivery Stream
+  KinesisFirehoseDeliveryStream:
+    Type: AWS::KinesisFirehose::DeliveryStream
+    Properties:
+      DeliveryStreamName: !Sub 'zeta-sparrow-firehose-stream-${Region}-${Environment}'
+      DeliveryStreamType: DirectPut
+      S3DestinationConfiguration:
+        BucketARN:
+          Fn::ImportValue: !Sub '${S3StackName}-RecordingsAndTranscriptsBucket'
+        RoleARN: !GetAtt FirehoseDeliveryRole.Arn
+        BufferingHints:
+          SizeInMBs: 128
+          IntervalInSeconds: 300
+        CompressionFormat: GZIP
+        CloudWatchLoggingOptions:
+          Enabled: true
+          LogGroupName: !Ref FirehoseLogGroup
+          LogStreamName: !Ref FirehoseLogStream
+        S3BackupMode: Disabled
+      Tags:
+        - Key: Name
+          Value: !Sub 'zeta-sparrow-firehose-stream-${Region}-${Environment}'
+        - Key: environment
+          Value: !Ref Environment
+        - Key: costCenter
+          Value: !Ref CostCenter
+        - Key: appService
+          Value: !Ref Client
+        - Key: deployedBy
+          Value: cloudformation
+
+  # ====================
+  # COMMENTED OUT FIREHOSE COMPONENTS (FOR FUTURE USE)
+  # ====================
+  # Uncomment and configure these components as needed for additional Firehose streams
+  
+  # # Additional Firehose Delivery Stream for CTR data
+  # CTRFirehoseDeliveryStream:
+  #   Type: AWS::KinesisFirehose::DeliveryStream
+  #   Properties:
+  #     DeliveryStreamName: !Sub 'ctr-firehose-stream-${Region}-${Environment}'
+  #     DeliveryStreamType: KinesisStreamAsSource
+  #     KinesisStreamSourceConfiguration:
+  #       KinesisStreamARN: !GetAtt CTRKinesisStream.Arn
+  #       RoleARN: !GetAtt FirehoseDeliveryRole.Arn
+  #     S3DestinationConfiguration:
+  #       BucketARN:
+  #         Fn::ImportValue: !Sub '${S3StackName}-RecordingsAndTranscriptsBucket'
+  #       RoleARN: !GetAtt FirehoseDeliveryRole.Arn
+  #       BufferingHints:
+  #         SizeInMBs: 128
+  #         IntervalInSeconds: 300
+  #       CompressionFormat: GZIP
+  #       Prefix: 'ctr-data/'
+  #       CloudWatchLoggingOptions:
+  #         Enabled: true
+  #         LogGroupName: !Ref FirehoseLogGroup
+  #         LogStreamName: !Ref FirehoseLogStream
+  #       S3BackupMode: Disabled
+  #     Tags:
+  #       - Key: Name
+  #         Value: !Sub 'ctr-firehose-stream-${Region}-${Environment}'
+  #       - Key: environment
+  #         Value: !Ref Environment
+  #       - Key: costCenter
+  #         Value: !Ref CostCenter
+  #       - Key: appService
+  #         Value: !Ref Client
+  #       - Key: deployedBy
+  #         Value: cloudformation
+
+  # # Additional Firehose Delivery Stream for Agent Events
+  # AgentEventFirehoseDeliveryStream:
+  #   Type: AWS::KinesisFirehose::DeliveryStream
+  #   Properties:
+  #     DeliveryStreamName: !Sub 'agent-event-firehose-stream-${Region}-${Environment}'
+  #     DeliveryStreamType: KinesisStreamAsSource
+  #     KinesisStreamSourceConfiguration:
+  #       KinesisStreamARN: !GetAtt AgentEventKinesisStream.Arn
+  #       RoleARN: !GetAtt FirehoseDeliveryRole.Arn
+  #     S3DestinationConfiguration:
+  #       BucketARN:
+  #         Fn::ImportValue: !Sub '${S3StackName}-RecordingsAndTranscriptsBucket'
+  #       RoleARN: !GetAtt FirehoseDeliveryRole.Arn
+  #       BufferingHints:
+  #         SizeInMBs: 128
+  #         IntervalInSeconds: 300
+  #       CompressionFormat: GZIP
+  #       Prefix: 'agent-events/'
+  #       CloudWatchLoggingOptions:
+  #         Enabled: true
+  #         LogGroupName: !Ref FirehoseLogGroup
+  #         LogStreamName: !Ref FirehoseLogStream
+  #       S3BackupMode: Disabled
+  #     Tags:
+  #       - Key: Name
+  #         Value: !Sub 'agent-event-firehose-stream-${Region}-${Environment}'
+  #       - Key: environment
+  #         Value: !Ref Environment
+  #       - Key: costCenter
+  #         Value: !Ref CostCenter
+  #       - Key: appService
+  #         Value: !Ref Client
+  #       - Key: deployedBy
+  #         Value: cloudformation
+
+Outputs:
+  QueueExperienceKinesisStreamName:
+    Description: Queue Experience Kinesis Stream Name
+    Value: !Ref QueueExperienceKinesisStream
+    Export:
+      Name: !Sub '${AWS::StackName}-QueueExperienceKinesisStream'
+
+  QueueExperienceKinesisStreamArn:
+    Description: Queue Experience Kinesis Stream ARN
+    Value: !GetAtt QueueExperienceKinesisStream.Arn
+    Export:
+      Name: !Sub '${AWS::StackName}-QueueExperienceKinesisStreamArn'
+
+  CTRKinesisStreamName:
+    Description: CTR Kinesis Stream Name
+    Value: !Ref CTRKinesisStream
+    Export:
+      Name: !Sub '${AWS::StackName}-CTRKinesisStream'
+
+  CTRKinesisStreamArn:
+    Description: CTR Kinesis Stream ARN
+    Value: !GetAtt CTRKinesisStream.Arn
+    Export:
+      Name: !Sub '${AWS::StackName}-CTRKinesisStreamArn'
+
+  AgentEventKinesisStreamName:
+    Description: Agent Event Kinesis Stream Name
+    Value: !Ref AgentEventKinesisStream
+    Export:
+      Name: !Sub '${AWS::StackName}-AgentEventKinesisStream'
+
+  AgentEventKinesisStreamArn:
+    Description: Agent Event Kinesis Stream ARN
+    Value: !GetAtt AgentEventKinesisStream.Arn
+    Export:
+      Name: !Sub '${AWS::StackName}-AgentEventKinesisStreamArn'
+
+  FirehoseDeliveryStreamName:
+    Description: Kinesis Firehose Delivery Stream Name
+    Value: !Ref KinesisFirehoseDeliveryStream
+    Export:
+      Name: !Sub '${AWS::StackName}-FirehoseDeliveryStream'
+
+  FirehoseDeliveryStreamArn:
+    Description: Kinesis Firehose Delivery Stream ARN
+    Value: !GetAtt KinesisFirehoseDeliveryStream.Arn
+    Export:
+      Name: !Sub '${AWS::StackName}-FirehoseDeliveryStreamArn'
+
+  FirehoseDeliveryRoleArn:
+    Description: Firehose Delivery Role ARN
+    Value: !GetAtt FirehoseDeliveryRole.Arn
+    Export:
+      Name: !Sub '${AWS::StackName}-FirehoseDeliveryRole'

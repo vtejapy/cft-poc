@@ -1,0 +1,1340 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: 'Lambda functions and layers for contact center application'
+
+Parameters:
+  Environment:
+    Type: String
+    Default: dev
+    AllowedValues: [dev, stg, prod]
+    Description: Environment name
+
+  Region:
+    Type: String
+    Default: us-east-1
+    Description: AWS region for deployment
+
+  Client:
+    Type: String
+    Default: gen-client5
+    Description: Client name
+
+  CostCenter:
+    Type: String
+    Default: '1003'
+    Description: Cost center for billing tags
+
+  LambdaMemorySize:
+    Type: Number
+    Default: 128
+    Description: Lambda memory size in MB
+
+  LambdaTimeout:
+    Type: Number
+    Default: 30
+    Description: Lambda timeout in seconds
+
+  LambdaRuntime:
+    Type: String
+    Default: python3.10
+    Description: Lambda runtime
+
+  VPCStackName:
+    Type: String
+    Description: Name of the VPC stack
+
+  IAMStackName:
+    Type: String
+    Description: Name of the IAM stack
+
+  ConnectInstanceId:
+    Type: String
+    Description: Amazon Connect Instance ID
+
+  DatabaseEndpoint:
+    Type: String
+    Description: RDS Database Endpoint
+
+  DatabasePort:
+    Type: Number
+    Default: 5432
+    Description: Database port
+
+  DatabaseName:
+    Type: String
+    Default: postgres
+    Description: Database name
+
+  SchemaName:
+    Type: String
+    Default: agent_desktop_assist
+    Description: Database schema name
+
+  SecretManagerName:
+    Type: String
+    Description: RDS Secret Manager Name
+
+  S3BucketVoiceMail:
+    Type: String
+    Description: S3 bucket for voice mail
+
+  S3BucketExportedReports:
+    Type: String
+    Description: S3 bucket for exported reports
+
+  S3BucketRecordings:
+    Type: String
+    Description: S3 bucket for recordings and transcripts
+
+  S3BucketScreenRecordings:
+    Type: String
+    Description: S3 bucket for screen recordings
+
+  S3BucketCCenter:
+    Type: String
+    Description: S3 bucket for contact center
+
+  DynamoDBTableName:
+    Type: String
+    Description: DynamoDB table name for queue experience
+
+  ContactFlowId:
+    Type: String
+    Description: Connect contact flow ID
+
+  ApiGatewayId:
+    Type: String
+    Description: API Gateway REST API ID
+
+  ApiGatewayStageUrl:
+    Type: String
+    Description: API Gateway stage invoke URL
+
+  KinesisStackName:
+    Type: String
+    Description: Name of the Kinesis stack
+
+  SMTPFromAddress:
+    Type: String
+    Default: gnwcc-dev@genworth.com
+    Description: SMTP from address
+
+  SMTPHost:
+    Type: String
+    Default: smtp.genworth.net
+    Description: SMTP host
+
+  SMTPPort:
+    Type: Number
+    Default: 587
+    Description: SMTP port
+
+  SMTPSecretName:
+    Type: String
+    Default: SMTP
+    Description: SMTP secret name
+
+  SMTPUsername:
+    Type: String
+    Default: smtp-user
+    Description: SMTP username
+
+Resources:
+  # ====================
+  # LAMBDA LAYERS
+  # ====================
+  
+  # Active Layer - Agent Desktop Layer
+  AgentDesktopLayer:
+    Type: AWS::Lambda::LayerVersion
+    Properties:
+      LayerName: genpact-itr-agent-desktop
+      Description: genpact-itr-agent-desktop layer for voice mail lambda notification
+      Content:
+        S3Bucket: !Sub '${Client}-lambda-layers-${Region}-${Environment}'
+        S3Key: layers/genpact-itr-agent-desktop.zip
+      CompatibleRuntimes:
+        - python3.10
+      CompatibleArchitectures:
+        - x86_64
+
+  # ====================
+  # COMMENTED OUT LAMBDA LAYERS (FOR FUTURE USE)
+  # ====================
+  # Uncomment and configure these layers as needed
+
+  # PostgreSQL Layer
+  # PostgreSQLLayer:
+  #   Type: AWS::Lambda::LayerVersion
+  #   Properties:
+  #     LayerName: genpact-postgresnew
+  #     Description: genpact-postgresnew layer for database connectivity
+  #     Content:
+  #       S3Bucket: !Sub '${Client}-lambda-layers-${Region}-${Environment}'
+  #       S3Key: layers/genpact-postgresnew.zip
+  #     CompatibleRuntimes:
+  #       - python3.10
+  #     CompatibleArchitectures:
+  #       - x86_64
+
+  # SMTP Layer
+  # SMTPLayer:
+  #   Type: AWS::Lambda::LayerVersion
+  #   Properties:
+  #     LayerName: genpact-pysmtp
+  #     Description: genpact-pysmtp layer for email notifications
+  #     Content:
+  #       S3Bucket: !Sub '${Client}-lambda-layers-${Region}-${Environment}'
+  #       S3Key: layers/genpact-pysmtp.zip
+  #     CompatibleRuntimes:
+  #       - python3.10
+  #     CompatibleArchitectures:
+  #       - x86_64
+
+  # Requests Layer
+  # RequestsLayer:
+  #   Type: AWS::Lambda::LayerVersion
+  #   Properties:
+  #     LayerName: genpact-pyrequests
+  #     Description: genpact-pyrequests layer for HTTP requests
+  #     Content:
+  #       S3Bucket: !Sub '${Client}-lambda-layers-${Region}-${Environment}'
+  #       S3Key: layers/genpact-pyrequests.zip
+  #     CompatibleRuntimes:
+  #       - python3.10
+  #     CompatibleArchitectures:
+  #       - x86_64
+
+  # Axios Request Layer
+  # AxiosRequestLayer:
+  #   Type: AWS::Lambda::LayerVersion
+  #   Properties:
+  #     LayerName: genpact-axiosrequest
+  #     Description: genpact-axiosrequest layer for HTTP requests in Node.js
+  #     Content:
+  #       S3Bucket: !Sub '${Client}-lambda-layers-${Region}-${Environment}'
+  #       S3Key: layers/genpact-axiosrequest.zip
+  #     CompatibleRuntimes:
+  #       - python3.10
+  #     CompatibleArchitectures:
+  #       - x86_64
+
+  # Node Mailer Layer
+  # NodeMailerLayer:
+  #   Type: AWS::Lambda::LayerVersion
+  #   Properties:
+  #     LayerName: genpact-nodemailer
+  #     Description: genpact-nodemailer layer for email in Node.js
+  #     Content:
+  #       S3Bucket: !Sub '${Client}-lambda-layers-${Region}-${Environment}'
+  #       S3Key: layers/genpact-nodemailer.zip
+  #     CompatibleRuntimes:
+  #       - nodejs18.x
+  #     CompatibleArchitectures:
+  #       - x86_64
+
+  # AWS Crypto Layer
+  # AWSCryptoLayer:
+  #   Type: AWS::Lambda::LayerVersion
+  #   Properties:
+  #     LayerName: genpact-awscrypto
+  #     Description: genpact-awscrypto layer for encryption/decryption
+  #     Content:
+  #       S3Bucket: !Sub '${Client}-lambda-layers-${Region}-${Environment}'
+  #       S3Key: layers/genpact-awscrypto.zip
+  #     CompatibleRuntimes:
+  #       - nodejs18.x
+  #     CompatibleArchitectures:
+  #       - x86_64
+
+  # KVS to AC WAV Layer
+  # KVSToACWAVLayer:
+  #   Type: AWS::Lambda::LayerVersion
+  #   Properties:
+  #     LayerName: genpact-kvs2ACwav
+  #     Description: genpact-kvs2ACwav layer for audio processing
+  #     Content:
+  #       S3Bucket: !Sub '${Client}-lambda-layers-${Region}-${Environment}'
+  #       S3Key: layers/genpact-kvs2ACwav.zip
+  #     CompatibleRuntimes:
+  #       - nodejs20.x
+  #     CompatibleArchitectures:
+  #       - x86_64
+
+  # JWT Layer
+  # JWTLayer:
+  #   Type: AWS::Lambda::LayerVersion
+  #   Properties:
+  #     LayerName: genpact-jwt
+  #     Description: genpact-jwt layer
+  #     Content:
+  #       S3Bucket: !Sub '${Client}-lambda-layers-${Region}-${Environment}'
+  #       S3Key: layers/genpact-jwt.zip
+  #     CompatibleRuntimes:
+  #       - python3.10
+  #     CompatibleArchitectures:
+  #       - x86_64
+
+  # Psycopg2 New Layer
+  # Psycopg2NewLayer:
+  #   Type: AWS::Lambda::LayerVersion
+  #   Properties:
+  #     LayerName: genpact-psycopg2_new
+  #     Description: genpact-psycopg2_new
+  #     Content:
+  #       S3Bucket: !Sub '${Client}-lambda-layers-${Region}-${Environment}'
+  #       S3Key: layers/genpact-psycopg2-new.zip
+  #     CompatibleRuntimes:
+  #       - python3.10
+  #     CompatibleArchitectures:
+  #       - x86_64
+
+  # ====================
+  # LAMBDA FUNCTIONS
+  # ====================
+  
+  # PRIMARY LAMBDA FUNCTION - Command Center Lambda
+  CommandCenterLambda:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: !Sub 'command-center-lambda-${Client}-${Region}-${Environment}'
+      Runtime: !Ref LambdaRuntime
+      Handler: lambda_function.lambda_handler
+      Role: 
+        Fn::ImportValue: !Sub '${IAMStackName}-CommandCenterLambdaRole'
+      MemorySize: !Ref LambdaMemorySize
+      Timeout: !Ref LambdaTimeout
+      Code:
+        ZipFile: |
+          import json
+          import os
+          
+          def lambda_handler(event, context):
+              region = os.environ.get('REGION_NAME', 'us-east-1')
+              
+              return {
+                  'statusCode': 200,
+                  'body': json.dumps({
+                      'message': 'Command Center Lambda function',
+                      'region': region
+                  })
+              }
+      Environment:
+        Variables:
+          REGION_NAME: !Ref Region
+      VpcConfig:
+        SubnetIds:
+          - Fn::ImportValue: !Sub '${VPCStackName}-PrivateSubnet1-ID'
+          - Fn::ImportValue: !Sub '${VPCStackName}-PrivateSubnet2-ID'
+        SecurityGroupIds:
+          - !Ref CommandCenterSecurityGroup
+      Layers:
+        - !Ref AgentDesktopLayer
+      Tags:
+        - Key: Name
+          Value: !Sub 'command-center-lambda-${Client}-${Region}-${Environment}'
+        - Key: environment
+          Value: !Ref Environment
+        - Key: costCenter
+          Value: !Ref CostCenter
+        - Key: appService
+          Value: !Ref Client
+        - Key: deployedBy
+          Value: cloudformation
+
+  # Security Group for Command Center Lambda
+  CommandCenterSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Security group for Command Center Lambda
+      VpcId:
+        Fn::ImportValue: !Sub '${VPCStackName}-VPC-ID'
+      SecurityGroupEgress:
+        - IpProtocol: tcp
+          FromPort: 443
+          ToPort: 443
+          CidrIp: 0.0.0.0/0
+          Description: HTTPS outbound
+        - IpProtocol: tcp
+          FromPort: 5432
+          ToPort: 5432
+          CidrIp: 10.113.0.0/16
+          Description: PostgreSQL database access
+      Tags:
+        - Key: Name
+          Value: !Sub 'command-center-sg-${Client}-${Region}-${Environment}'
+        - Key: environment
+          Value: !Ref Environment
+        - Key: costCenter
+          Value: !Ref CostCenter
+        - Key: appService
+          Value: !Ref Client
+        - Key: deployedBy
+          Value: cloudformation
+
+  # ====================
+  # OUTBOUND CONTACT PRECHECK UTILITY LAMBDA
+  # ====================
+  
+  OutboundContactPrecheckUtilityLambda:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: !Sub 'outbound-contact-prechk-util-lambda-${Client}-${Region}-${Environment}'
+      Runtime: python3.10
+      Handler: lambda_function.lambda_handler
+      Role: 
+        Fn::ImportValue: !Sub '${IAMStackName}-OutboundContactPrecheckUtilityLambdaRole'
+      MemorySize: !Ref LambdaMemorySize
+      Timeout: 300
+      Code:
+        ZipFile: |
+          import json
+          import os
+          
+          def lambda_handler(event, context):
+              instance_id = os.environ.get('INSTANCE_ID', '')
+              
+              return {
+                  'statusCode': 200,
+                  'body': json.dumps({
+                      'message': 'Outbound Contact Precheck Utility Lambda',
+                      'instance_id': instance_id
+                  })
+              }
+      Environment:
+        Variables:
+          INSTANCE_ID: !Ref ConnectInstanceId
+      VpcConfig:
+        SubnetIds:
+          - Fn::ImportValue: !Sub '${VPCStackName}-PrivateSubnet1-ID'
+          - Fn::ImportValue: !Sub '${VPCStackName}-PrivateSubnet2-ID'
+        SecurityGroupIds:
+          - !Ref OutboundContactPrecheckSecurityGroup
+      Tags:
+        - Key: Name
+          Value: !Sub 'outbound-contact-prechk-util-lambda-${Client}-${Region}-${Environment}'
+        - Key: environment
+          Value: !Ref Environment
+        - Key: costCenter
+          Value: !Ref CostCenter
+        - Key: appService
+          Value: !Ref Client
+        - Key: deployedBy
+          Value: cloudformation
+
+  # Security Group for Outbound Contact Precheck Lambda
+  OutboundContactPrecheckSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Security group for Outbound Contact Precheck Lambda
+      VpcId:
+        Fn::ImportValue: !Sub '${VPCStackName}-VPC-ID'
+      SecurityGroupEgress:
+        - IpProtocol: tcp
+          FromPort: 443
+          ToPort: 443
+          CidrIp: 0.0.0.0/0
+          Description: HTTPS outbound
+      Tags:
+        - Key: Name
+          Value: !Sub 'outbound-contact-prechk-sg-${Client}-${Region}-${Environment}'
+        - Key: environment
+          Value: !Ref Environment
+        - Key: costCenter
+          Value: !Ref CostCenter
+        - Key: appService
+          Value: !Ref Client
+        - Key: deployedBy
+          Value: cloudformation
+
+  # ====================
+  # COMMENTED OUT LAMBDA FUNCTIONS (FOR FUTURE USE)
+  # ====================
+  # Uncomment and configure these Lambda functions as needed
+
+  # # Contact Center Core API Lambda
+  # ContactCenterCoreAPILambda:
+  #   Type: AWS::Lambda::Function
+  #   Properties:
+  #     FunctionName: !Sub 'contact-center-core-api-lambda-${Client}-${Region}-${Environment}'
+  #     Runtime: !Ref LambdaRuntime
+  #     Handler: lambda_function.lambda_handler
+  #     Role: 
+  #       Fn::ImportValue: !Sub '${IAMStackName}-ContactCenterCoreApiLambdaRole'
+  #     MemorySize: 512
+  #     Timeout: !Ref LambdaTimeout
+  #     Code:
+  #       ZipFile: |
+  #         import json
+  #         import os
+  #         
+  #         def lambda_handler(event, context):
+  #             return {
+  #                 'statusCode': 200,
+  #                 'body': json.dumps({
+  #                     'message': 'Contact Center Core API Lambda',
+  #                     'region': os.environ.get('REGION_NAME', 'us-east-1')
+  #                 })
+  #             }
+  #     Environment:
+  #       Variables:
+  #         BUCKET_ENDPOINT_URL: !Sub 'https://bucket.vpc-endpoint.${Region}.amazonaws.com'
+  #         DATABASE_ENDPOINT: !Ref DatabaseEndpoint
+  #         DATABASE_NAME: !Ref DatabaseName
+  #         DATABASE_PORT: !Ref DatabasePort
+  #         INSTANCE_ID: !Ref ConnectInstanceId
+  #         REGION_NAME: !Ref Region
+  #         S3_BUCKET: !Ref S3BucketVoiceMail
+  #         S3_PREFIX: '/'
+  #         SCHEME_NAME: !Ref SchemaName
+  #         SECRET_MANAGER_NAME: !Ref SecretManagerName
+  #     VpcConfig:
+  #       SubnetIds:
+  #         - Fn::ImportValue: !Sub '${VPCStackName}-PrivateSubnet1-ID'
+  #         - Fn::ImportValue: !Sub '${VPCStackName}-PrivateSubnet2-ID'
+  #       SecurityGroupIds:
+  #         - !Ref ContactCenterCoreAPISecurityGroup
+  #     # Layers:
+  #     #   - !Ref AgentDesktopLayer
+  #     #   - !Ref JWTLayer
+  #     #   - !Ref Psycopg2NewLayer
+  #     Tags:
+  #       - Key: Name
+  #         Value: !Sub 'contact-center-core-api-lambda-${Client}-${Region}-${Environment}'
+  #       - Key: environment
+  #         Value: !Ref Environment
+  #       - Key: costCenter
+  #         Value: !Ref CostCenter
+  #       - Key: appService
+  #         Value: !Ref Client
+  #       - Key: deployedBy
+  #         Value: cloudformation
+
+  # # KVS Recording Processor Lambda
+  # KVSRecordingProcessorLambda:
+  #   Type: AWS::Lambda::Function
+  #   Properties:
+  #     FunctionName: !Sub 'kvs-processor-lambda-${Client}-${Region}-${Environment}'
+  #     Runtime: nodejs20.x
+  #     Handler: index.handler
+  #     Role: 
+  #       Fn::ImportValue: !Sub '${IAMStackName}-KvsRecordingProcessorLambdaRole'
+  #     MemorySize: 512
+  #     Timeout: 180
+  #     Code:
+  #       ZipFile: |
+  #         exports.handler = async (event) => {
+  #             const region = process.env.REGION_NAME || 'us-east-1';
+  #             return {
+  #                 statusCode: 200,
+  #                 body: JSON.stringify({
+  #                     message: 'KVS Recording Processor Lambda',
+  #                     region: region
+  #                 })
+  #             };
+  #         };
+  #     Environment:
+  #       Variables:
+  #         REGION_NAME: !Ref Region
+  #     VpcConfig:
+  #       SubnetIds:
+  #         - Fn::ImportValue: !Sub '${VPCStackName}-PrivateSubnet1-ID'
+  #         - Fn::ImportValue: !Sub '${VPCStackName}-PrivateSubnet2-ID'
+  #       SecurityGroupIds:
+  #         - !Ref KVSRecordingProcessorSecurityGroup
+  #     # Layers:
+  #     #   - !Ref KVSToACWAVLayer
+  #     #   - !Ref AWSCryptoLayer
+  #     #   - !Ref NodeMailerLayer
+  #     #   - !Ref AxiosRequestLayer
+  #     Tags:
+  #       - Key: Name
+  #         Value: !Sub 'kvs-processor-lambda-${Client}-${Region}-${Environment}'
+  #       - Key: environment
+  #         Value: !Ref Environment
+  #       - Key: costCenter
+  #         Value: !Ref CostCenter
+  #       - Key: appService
+  #         Value: !Ref Client
+  #       - Key: deployedBy
+  #         Value: cloudformation
+
+  # # ContactLens Evaluation Loader Lambda
+  # ContactLensEvaluationLoaderLambda:
+  #   Type: AWS::Lambda::Function
+  #   Properties:
+  #     FunctionName: !Sub 'contactLens-evaluation-loader-lambda-${Client}-${Region}-${Environment}'
+  #     Runtime: !Ref LambdaRuntime
+  #     Handler: lambda_function.lambda_handler
+  #     Role: 
+  #       Fn::ImportValue: !Sub '${IAMStackName}-ContactLensEvaluationLoaderLambdaRole'
+  #     MemorySize: !Ref LambdaMemorySize
+  #     Timeout: 900
+  #     Code:
+  #       ZipFile: |
+  #         import json
+  #         import os
+  #         
+  #         def lambda_handler(event, context):
+  #             return {
+  #                 'statusCode': 200,
+  #                 'body': json.dumps({
+  #                     'message': 'ContactLens Evaluation Loader Lambda',
+  #                     'region': os.environ.get('region_name', 'us-east-1')
+  #                 })
+  #             }
+  #     Environment:
+  #       Variables:
+  #         bucket_endpoint_url: !Sub 'https://bucket.vpc-endpoint.${Region}.amazonaws.com'
+  #         contact_lens_path: 'Reports/EDH/Daily/ContactLens'
+  #         headers1: 'Contact ID,Contact Date,Agent ID,Agent Name,Survey ID, Question1 ID, Answer1, Question2 ID,Answer2,Question3 ID,Answer3,Question4 ID,Answer4,Question5 ID,Answer5,Question6 ID,Answer6,Customer Sentiment score'
+  #         headers2: 'Contact ID,Contact Date,Agent Name,Call Category,Sentiment Score'
+  #         host: !Ref DatabaseEndpoint
+  #         port: !Ref DatabasePort
+  #         postcall_survey_path: 'Reports/EDH/Daily/PostCallSurvey'
+  #         query1: 'SELECT t1.contact_id, t1.created_at, t3.ai_agentid, t3.ai_agentname, t1.survey_id, t1.question_id, t1.results, t1.comprehend FROM agent_desktop_assist.postcallsurveyresults t1 INNER JOIN agent_desktop_assist.postcallsurveyquestions t2 ON t1.question_id = t2.question_id INNER JOIN agent_desktop_assist.agentinteraction t3 ON t1.contact_id = t3.ai_contactid WHERE DATE(t1.created_at) = CURRENT_DATE order by created_at;'
+  #         query2: 'SELECT clr_contact_id, clr_created_date,ai_agentname AS interaction_agent_name, clr_call_category, clr_sentiment FROM agent_desktop_assist.contactlensedhreport AS clr INNER JOIN agent_desktop_assist.agentinteraction AS ai ON clr.clr_contact_id = ai.ai_contactid where date(clr.clr_created_date)= CURRENT_DATE;'
+  #         region_name: !Ref Region
+  #         secret_name: !Ref SecretManagerName
+  #         ctr_prefix: 'CTR/ErrorRecords/'
+  #         ctr_processed_prefix: 'CTR/Processed/'
+  #         edh_secret_name: 'EDH'
+  #     VpcConfig:
+  #       SubnetIds:
+  #         - Fn::ImportValue: !Sub '${VPCStackName}-PrivateSubnet1-ID'
+  #         - Fn::ImportValue: !Sub '${VPCStackName}-PrivateSubnet2-ID'
+  #       SecurityGroupIds:
+  #         - !Ref ContactLensEvaluationLoaderSecurityGroup
+  #     # Layers:
+  #     #   - !Ref PostgreSQLLayer
+  #     #   - !Sub 'arn:aws:lambda:${Region}:336392948345:layer:AWSSDKPandas-Python310:19'
+  #     Tags:
+  #       - Key: Name
+  #         Value: !Sub 'contactLens-evaluation-loader-lambda-${Client}-${Region}-${Environment}'
+  #       - Key: environment
+  #         Value: !Ref Environment
+  #       - Key: costCenter
+  #         Value: !Ref CostCenter
+  #       - Key: appService
+  #         Value: !Ref Client
+  #       - Key: deployedBy
+  #         Value: cloudformation
+
+  # # CloudWatch Alarm Processor Lambda
+  # CloudWatchAlarmProcessorLambda:
+  #   Type: AWS::Lambda::Function
+  #   Properties:
+  #     FunctionName: !Sub 'cloudwatch-alarm-processor-lambda-${Client}-${Region}-${Environment}'
+  #     Runtime: nodejs20.x
+  #     Handler: index.handler
+  #     Role: 
+  #       Fn::ImportValue: !Sub '${IAMStackName}-CloudWatchAlarmProcessorLambdaRole'
+  #     MemorySize: 256
+  #     Timeout: 10
+  #     Code:
+  #       ZipFile: |
+  #         exports.handler = async (event) => {
+  #             const region = process.env.region_name || 'us-east-1';
+  #             return {
+  #                 statusCode: 200,
+  #                 body: JSON.stringify({
+  #                     message: 'CloudWatch Alarm Processor Lambda',
+  #                     region: region
+  #                 })
+  #             };
+  #         };
+  #     Environment:
+  #       Variables:
+  #         SMTP_From_Address: !Ref SMTPFromAddress
+  #         SMTP_host: !Ref SMTPHost
+  #         SMTP_port: !Ref SMTPPort
+  #         SMTP_secret_name: !Ref SMTPSecretName
+  #         SMTP_username: !Ref SMTPUsername
+  #         region_name: !Ref Region
+  #         cw_alarm_api: !Sub '${ApiGatewayStageUrl}/api/cloudwatch-alarm/get-notification-details/'
+  #     VpcConfig:
+  #       SubnetIds:
+  #         - Fn::ImportValue: !Sub '${VPCStackName}-PrivateSubnet1-ID'
+  #         - Fn::ImportValue: !Sub '${VPCStackName}-PrivateSubnet2-ID'
+  #       SecurityGroupIds:
+  #         - !Ref CloudWatchAlarmProcessorSecurityGroup
+  #     # Layers:
+  #     #   - !Ref NodeMailerLayer
+  #     #   - !Ref AWSCryptoLayer
+  #     Tags:
+  #       - Key: Name
+  #         Value: !Sub 'cloudwatch-alarm-processor-lambda-${Client}-${Region}-${Environment}'
+  #       - Key: environment
+  #         Value: !Ref Environment
+  #       - Key: costCenter
+  #         Value: !Ref CostCenter
+  #       - Key: appService
+  #         Value: !Ref Client
+  #       - Key: deployedBy
+  #         Value: cloudformation
+
+  # # Queue Experience Utility Lambda
+  # QueueExperienceUtilityLambda:
+  #   Type: AWS::Lambda::Function
+  #   Properties:
+  #     FunctionName: !Sub 'queue-experience-utilit-lambda-${Client}-${Region}-${Environment}'
+  #     Runtime: !Ref LambdaRuntime
+  #     Handler: lambda_function.lambda_handler
+  #     Role: 
+  #       Fn::ImportValue: !Sub '${IAMStackName}-QueueExperienceUtilityLambdaRole'
+  #     MemorySize: !Ref LambdaMemorySize
+  #     Timeout: 300
+  #     Code:
+  #       ZipFile: |
+  #         import json
+  #         import os
+  #         
+  #         def lambda_handler(event, context):
+  #             return {
+  #                 'statusCode': 200,
+  #                 'body': json.dumps({
+  #                     'message': 'Queue Experience Utility Lambda',
+  #                     'dynamodb_table': os.environ.get('QueuePositionTable', '')
+  #                 })
+  #             }
+  #     Environment:
+  #       Variables:
+  #         DYNAMODB_ENDPOINT_URL: !Sub 'https://dynamodb.${Region}.amazonaws.com'
+  #         QueuePositionTable: !Ref DynamoDBTableName
+  #         contactflowid: !Ref ContactFlowId
+  #         instanceid: !Ref ConnectInstanceId
+  #     VpcConfig:
+  #       SubnetIds:
+  #         - Fn::ImportValue: !Sub '${VPCStackName}-PrivateSubnet1-ID'
+  #         - Fn::ImportValue: !Sub '${VPCStackName}-PrivateSubnet2-ID'
+  #       SecurityGroupIds:
+  #         - !Ref QueueExperienceUtilitySecurityGroup
+  #     Tags:
+  #       - Key: Name
+  #         Value: !Sub 'queue-experience-utility-lambda-${Client}-${Region}-${Environment}'
+  #       - Key: environment
+  #         Value: !Ref Environment
+  #       - Key: costCenter
+  #         Value: !Ref CostCenter
+  #       - Key: appService
+  #         Value: !Ref Client
+  #       - Key: deployedBy
+  #         Value: cloudformation
+
+  # # Contact Prechecks Utility Lambda
+  # ContactPrechecksUtilityLambda:
+  #   Type: AWS::Lambda::Function
+  #   Properties:
+  #     FunctionName: !Sub 'contact-prechecks-utility-lambda-${Client}-${Region}-${Environment}'
+  #     Runtime: python3.10
+  #     Handler: lambda_function.lambda_handler
+  #     Role: 
+  #       Fn::ImportValue: !Sub '${IAMStackName}-ContactPrechecksUtilityLambdaRole'
+  #     MemorySize: !Ref LambdaMemorySize
+  #     Timeout: 15
+  #     Code:
+  #       ZipFile: |
+  #         import json
+  #         import os
+  #         
+  #         def lambda_handler(event, context):
+  #             return {
+  #                 'statusCode': 200,
+  #                 'body': json.dumps({
+  #                     'message': 'Contact Prechecks Utility Lambda',
+  #                     'region': os.environ.get('region_name', 'us-east-1')
+  #                 })
+  #             }
+  #     Environment:
+  #       Variables:
+  #         fraud_number_api: !Sub '${ApiGatewayStageUrl}/api/fraudnumber/get_number_by_id/'
+  #         get_message_api: !Sub '${ApiGatewayStageUrl}/api/prompts-message/get-message'
+  #         region_name: !Ref Region
+  #         ivr_config_api: !Sub '${ApiGatewayStageUrl}/api/ivr-config/get-ivr-config'
+  #     VpcConfig:
+  #       SubnetIds:
+  #         - Fn::ImportValue: !Sub '${VPCStackName}-PrivateSubnet1-ID'
+  #         - Fn::ImportValue: !Sub '${VPCStackName}-PrivateSubnet2-ID'
+  #       SecurityGroupIds:
+  #         - !Ref ContactPrechecksUtilitySecurityGroup
+  #     # Layers:
+  #     #   - !Ref RequestsLayer
+  #     Tags:
+  #       - Key: Name
+  #         Value: !Sub 'contact-prechecks-utility-lambda-${Client}-${Region}-${Environment}'
+  #       - Key: environment
+  #         Value: !Ref Environment
+  #       - Key: costCenter
+  #         Value: !Ref CostCenter
+  #       - Key: appService
+  #         Value: !Ref Client
+  #       - Key: deployedBy
+  #         Value: cloudformation
+
+  # # CTR Processor Lambda
+  # CTRProcessorLambda:
+  #   Type: AWS::Lambda::Function
+  #   Properties:
+  #     FunctionName: !Sub 'ctr-processor-lambda-${Client}-${Region}-${Environment}'
+  #     Runtime: nodejs18.x
+  #     Handler: index.handler
+  #     Role: 
+  #       Fn::ImportValue: !Sub '${IAMStackName}-CtrProcessorLambdaRole'
+  #     MemorySize: 512
+  #     Timeout: 600
+  #     Code:
+  #       ZipFile: |
+  #         exports.handler = async (event) => {
+  #             const region = process.env.aws_region || 'us-east-1';
+  #             return {
+  #                 statusCode: 200,
+  #                 body: JSON.stringify({
+  #                     message: 'CTR Processor Lambda',
+  #                     region: region
+  #                 })
+  #             };
+  #         };
+  #     Environment:
+  #       Variables:
+  #         aws_region: !Ref Region
+  #         BUCKET_ENDPOINT_URL: ''
+  #         SMTP_From_Address: ''
+  #         SMTP_Mail_Template_CC_URL: ''
+  #         SMTP_host: ''
+  #         SMTP_port: ''
+  #         SMTP_secret_name: ''
+  #         SMTP_username: ''
+  #         child_lambda_name: ''
+  #         Not_required: ''
+  #         ctr_bucket_name: ''
+  #         ctr_prefix: ''
+  #         mail_id_api: !Sub '${ApiGatewayStageUrl}/api/voicemail/get-voicemail-delivery-setups-by-aws-id'
+  #         putctr_api: !Sub '${ApiGatewayStageUrl}/api/ctr/putctr'
+  #         s3_ivrRecording_bucket: !Sub '${S3BucketVoiceMail}/IvrRecordings'
+  #         s3_postcallsurvey_bucket: !Sub '${S3BucketVoiceMail}/PostcallSurveyRecordings'
+  #         s3_voicemail_bucket: !Sub '${S3BucketVoiceMail}/Voicemail'
+  #     VpcConfig:
+  #       SubnetIds:
+  #         - Fn::ImportValue: !Sub '${VPCStackName}-PrivateSubnet1-ID'
+  #         - Fn::ImportValue: !Sub '${VPCStackName}-PrivateSubnet2-ID'
+  #       SecurityGroupIds:
+  #         - !Ref CTRProcessorSecurityGroup
+  #     # Layers:
+  #     #   - !Ref KVSToACWAVLayer
+  #     #   - !Ref AWSCryptoLayer
+  #     #   - !Ref NodeMailerLayer
+  #     #   - !Ref AxiosRequestLayer
+  #     Tags:
+  #       - Key: Name
+  #         Value: !Sub 'ctr-processor-lambda-${Client}-${Region}-${Environment}'
+  #       - Key: environment
+  #         Value: !Ref Environment
+  #       - Key: costCenter
+  #         Value: !Ref CostCenter
+  #       - Key: appService
+  #         Value: !Ref Client
+  #       - Key: deployedBy
+  #         Value: cloudformation
+
+  # # CTR Processor Lambda Event Source Mapping
+  # CTRProcessorEventSourceMapping:
+  #   Type: AWS::Lambda::EventSourceMapping
+  #   Properties:
+  #     BatchSize: 5
+  #     MaximumRetryAttempts: 1
+  #     ParallelizationFactor: 5
+  #     BisectBatchOnFunctionError: true
+  #     EventSourceArn: 
+  #       Fn::ImportValue: !Sub '${KinesisStackName}-CTRKinesisStreamArn'
+  #     FunctionName: !Ref CTRProcessorLambda
+  #     StartingPosition: LATEST
+
+  # # Post Call Survey Utility Lambda
+  # PostCallSurveyUtilityLambda:
+  #   Type: AWS::Lambda::Function
+  #   Properties:
+  #     FunctionName: !Sub 'post-call-survey-utility-lambda-${Client}-${Region}-${Environment}'
+  #     Runtime: python3.10
+  #     Handler: lambda_function.lambda_handler
+  #     Role: 
+  #       Fn::ImportValue: !Sub '${IAMStackName}-PostCallSurveyUtilityLambdaRole'
+  #     MemorySize: 512
+  #     Timeout: 180
+  #     Code:
+  #       ZipFile: |
+  #         import json
+  #         import os
+  #         
+  #         def lambda_handler(event, context):
+  #             return {
+  #                 'statusCode': 200,
+  #                 'body': json.dumps({
+  #                     'message': 'Post Call Survey Utility Lambda',
+  #                     'region': os.environ.get('region_name', 'us-east-1')
+  #                 })
+  #             }
+  #     Environment:
+  #       Variables:
+  #         base_url: !Sub '${ApiGatewayStageUrl}/api/postcallsurvey/get-survey-details/'
+  #         region_name: !Ref Region
+  #     VpcConfig:
+  #       SubnetIds:
+  #         - Fn::ImportValue: !Sub '${VPCStackName}-PrivateSubnet1-ID'
+  #         - Fn::ImportValue: !Sub '${VPCStackName}-PrivateSubnet2-ID'
+  #       SecurityGroupIds:
+  #         - !Ref PostCallSurveyUtilitySecurityGroup
+  #     # Layers:
+  #     #   - !Ref RequestsLayer
+  #     Tags:
+  #       - Key: Name
+  #         Value: !Sub 'post-call-survey-utility-lambda-${Client}-${Region}-${Environment}'
+  #       - Key: environment
+  #         Value: !Ref Environment
+  #       - Key: costCenter
+  #         Value: !Ref CostCenter
+  #       - Key: appService
+  #         Value: !Ref Client
+  #       - Key: deployedBy
+  #         Value: cloudformation
+
+  # # Insurance Identification Trigger Lambda
+  # InsuranceIdentificationTriggerLambda:
+  #   Type: AWS::Lambda::Function
+  #   Properties:
+  #     FunctionName: !Sub 'insurance-identification-and-triggers-${Client}-${Region}-${Environment}'
+  #     Runtime: python3.10
+  #     Handler: lambda_function.lambda_handler
+  #     Role: 
+  #       Fn::ImportValue: !Sub '${IAMStackName}-InsuranceIdentificationTriggerLambdaRole'
+  #     MemorySize: 128
+  #     Timeout: 30
+  #     Code:
+  #       ZipFile: |
+  #         import json
+  #         import os
+  #         
+  #         def lambda_handler(event, context):
+  #             return {
+  #                 'statusCode': 200,
+  #                 'body': json.dumps({
+  #                     'message': 'Insurance Identification Trigger Lambda',
+  #                     'region': os.environ.get('region_name', 'us-east-1')
+  #                 })
+  #             }
+  #     Environment:
+  #       Variables:
+  #         auth_url: ''
+  #         bot_secret_url: ''
+  #         cl_queue: ''
+  #         cs_queue: ''
+  #         event_url: ''
+  #         ext_url: ''
+  #         identify_producer_phone_url: ''
+  #         identify_producer_url: ''
+  #         reconnect_url: ''
+  #         get_premium_details_url: !Sub '${ApiGatewayStageUrl}/api/insurance-core/getPremiumDetails?policy_number={policy_number}'
+  #         identify_phone_url: !Sub '${ApiGatewayStageUrl}/api/insurance-core/identifyByPhoneNumber?phone_number={phone_number}&role={role}'
+  #         region_name: !Ref Region
+  #         identify_policy_claim_url: !Sub '${ApiGatewayStageUrl}/api/insurance-core/getPolicyDetails?policy_or_claim_number={policy_or_claim_number}&role={role}'
+  #     VpcConfig:
+  #       SubnetIds:
+  #         - Fn::ImportValue: !Sub '${VPCStackName}-PrivateSubnet1-ID'
+  #         - Fn::ImportValue: !Sub '${VPCStackName}-PrivateSubnet2-ID'
+  #       SecurityGroupIds:
+  #         - !Ref InsuranceIdentificationTriggerSecurityGroup
+  #     # Layers:
+  #     #   - !Ref RequestsLayer
+  #     Tags:
+  #       - Key: Name
+  #         Value: !Sub 'insurance-identification-and-triggers-${Client}-${Region}-${Environment}'
+  #       - Key: environment
+  #         Value: !Ref Environment
+  #       - Key: costCenter
+  #         Value: !Ref CostCenter
+  #       - Key: appService
+  #         Value: !Ref Client
+  #       - Key: deployedBy
+  #         Value: cloudformation
+
+  # # Insurance Services Lambda
+  # InsuranceServicesLambda:
+  #   Type: AWS::Lambda::Function
+  #   Properties:
+  #     FunctionName: !Sub 'insurance-services-${Client}-${Region}-${Environment}'
+  #     Runtime: python3.10
+  #     Handler: lambda_function.lambda_handler
+  #     Role: 
+  #       Fn::ImportValue: !Sub '${IAMStackName}-InsuranceServicesLambdaRole'
+  #     MemorySize: 128
+  #     Timeout: 30
+  #     Code:
+  #       ZipFile: |
+  #         import json
+  #         import os
+  #         
+  #         def lambda_handler(event, context):
+  #             return {
+  #                 'statusCode': 200,
+  #                 'body': json.dumps({
+  #                     'message': 'Insurance Services Lambda',
+  #                     'region': os.environ.get('region_name', 'us-east-1')
+  #                 })
+  #             }
+  #     Environment:
+  #       Variables:
+  #         fraud_number_api: !Sub '${ApiGatewayStageUrl}/api/fraudnumber/get_number_by_id/'
+  #         get_message_api: !Sub '${ApiGatewayStageUrl}/api/prompts-message/get-message'
+  #         region_name: !Ref Region
+  #         ivr_config_api: !Sub '${ApiGatewayStageUrl}/api/ivr-config/get-ivr-config'
+  #     VpcConfig:
+  #       SubnetIds:
+  #         - Fn::ImportValue: !Sub '${VPCStackName}-PrivateSubnet1-ID'
+  #         - Fn::ImportValue: !Sub '${VPCStackName}-PrivateSubnet2-ID'
+  #       SecurityGroupIds:
+  #         - !Ref InsuranceServicesSecurityGroup
+  #     # Layers:
+  #     #   - !Ref RequestsLayer
+  #     Tags:
+  #       - Key: Name
+  #         Value: !Sub 'insurance-services-${Client}-${Region}-${Environment}'
+  #       - Key: environment
+  #         Value: !Ref Environment
+  #       - Key: costCenter
+  #         Value: !Ref CostCenter
+  #       - Key: appService
+  #         Value: !Ref Client
+  #       - Key: deployedBy
+  #         Value: cloudformation
+
+  # # KVS Recording Processor Lambda
+  # KVSRecordingProcessorLambda:
+  #   Type: AWS::Lambda::Function
+  #   Properties:
+  #     FunctionName: !Sub 'kvs-recording-processor-lambda-${Client}-${Region}-${Environment}'
+  #     Runtime: nodejs18.x
+  #     Handler: index.handler
+  #     Role: 
+  #       Fn::ImportValue: !Sub '${IAMStackName}-KVSRecordingProcessorLambdaRole'
+  #     MemorySize: 512
+  #     Timeout: 180
+  #     Code:
+  #       ZipFile: |
+  #         exports.handler = async (event) => {
+  #             const region = process.env.REGION_NAME || 'us-east-1';
+  #             return {
+  #                 statusCode: 200,
+  #                 body: JSON.stringify({
+  #                     message: 'KVS Recording Processor Lambda',
+  #                     region: region
+  #                 })
+  #             };
+  #         };
+  #     Environment:
+  #       Variables:
+  #         REGION_NAME: !Ref Region
+  #         # Add more environment variables as needed
+  #     VpcConfig:
+  #       SubnetIds:
+  #         - Fn::ImportValue: !Sub '${VPCStackName}-PrivateSubnet1-ID'
+  #         - Fn::ImportValue: !Sub '${VPCStackName}-PrivateSubnet2-ID'
+  #       SecurityGroupIds:
+  #         - !Ref KVSRecordingProcessorSecurityGroup
+  #     Tags:
+  #       - Key: Name
+  #         Value: !Sub 'kvs-recording-processor-lambda-${Client}-${Region}-${Environment}'
+  #       - Key: environment
+  #         Value: !Ref Environment
+  #       - Key: costCenter
+  #         Value: !Ref CostCenter
+  #       - Key: appService
+  #         Value: !Ref Client
+  #       - Key: deployedBy
+  #         Value: cloudformation
+
+  # ====================
+  # COMMENTED OUT SECURITY GROUPS (FOR FUTURE USE)
+  # ====================
+  # Uncomment and configure these security groups as needed for the Lambda functions above
+
+  # # Contact Center Core API Security Group
+  # ContactCenterCoreAPISecurityGroup:
+  #   Type: AWS::EC2::SecurityGroup
+  #   Properties:
+  #     GroupDescription: Security group for Contact Center Core API Lambda
+  #     VpcId:
+  #       Fn::ImportValue: !Sub '${VPCStackName}-VPC-ID'
+  #     SecurityGroupIngress:
+  #       - IpProtocol: tcp
+  #         FromPort: 443
+  #         ToPort: 443
+  #         CidrIp: 10.113.0.0/16
+  #         Description: HTTPS from VPC
+  #     SecurityGroupEgress:
+  #       - IpProtocol: tcp
+  #         FromPort: 443
+  #         ToPort: 443
+  #         CidrIp: 10.113.0.0/16
+  #         Description: HTTPS to VPC
+  #       - IpProtocol: tcp
+  #         FromPort: 5432
+  #         ToPort: 5432
+  #         CidrIp: 10.113.0.0/16
+  #         Description: PostgreSQL database access
+  #     Tags:
+  #       - Key: Name
+  #         Value: !Sub 'contact-center-core-api-sg-${Client}-${Region}-${Environment}'
+
+  # # KVS Recording Processor Security Group
+  # KVSRecordingProcessorSecurityGroup:
+  #   Type: AWS::EC2::SecurityGroup
+  #   Properties:
+  #     GroupDescription: Security group for KVS Recording Processor Lambda
+  #     VpcId:
+  #       Fn::ImportValue: !Sub '${VPCStackName}-VPC-ID'
+  #     SecurityGroupEgress:
+  #       - IpProtocol: tcp
+  #         FromPort: 443
+  #         ToPort: 443
+  #         CidrIp: 0.0.0.0/0
+  #         Description: HTTPS outbound
+  #     Tags:
+  #       - Key: Name
+  #         Value: !Sub 'kvs-recording-processor-sg-${Client}-${Region}-${Environment}'
+
+  # # ContactLens Evaluation Loader Security Group
+  # ContactLensEvaluationLoaderSecurityGroup:
+  #   Type: AWS::EC2::SecurityGroup
+  #   Properties:
+  #     GroupDescription: Security group for ContactLens Evaluation Loader Lambda
+  #     VpcId:
+  #       Fn::ImportValue: !Sub '${VPCStackName}-VPC-ID'
+  #     SecurityGroupIngress:
+  #       - IpProtocol: tcp
+  #         FromPort: 443
+  #         ToPort: 443
+  #         CidrIp: 10.113.0.0/16
+  #         Description: HTTPS from VPC
+  #     SecurityGroupEgress:
+  #       - IpProtocol: tcp
+  #         FromPort: 443
+  #         ToPort: 443
+  #         CidrIp: 10.113.0.0/16
+  #         Description: HTTPS to VPC
+  #       - IpProtocol: tcp
+  #         FromPort: 5432
+  #         ToPort: 5432
+  #         CidrIp: 10.113.0.0/16
+  #         Description: PostgreSQL database access
+  #     Tags:
+  #       - Key: Name
+  #         Value: !Sub 'contactLens-evaluation-loader-sg-${Client}-${Region}-${Environment}'
+
+  # # CloudWatch Alarm Processor Security Group
+  # CloudWatchAlarmProcessorSecurityGroup:
+  #   Type: AWS::EC2::SecurityGroup
+  #   Properties:
+  #     GroupDescription: Security group for CloudWatch Alarm Processor Lambda
+  #     VpcId:
+  #       Fn::ImportValue: !Sub '${VPCStackName}-VPC-ID'
+  #     SecurityGroupEgress:
+  #       - IpProtocol: tcp
+  #         FromPort: 443
+  #         ToPort: 443
+  #         CidrIp: 10.113.0.0/16
+  #         Description: HTTPS to VPC
+  #       - IpProtocol: tcp
+  #         FromPort: 25
+  #         ToPort: 25
+  #         CidrIp: 172.16.14.210/32
+  #         Description: SMTP to mail server
+  #       - IpProtocol: tcp
+  #         FromPort: 587
+  #         ToPort: 587
+  #         CidrIp: 172.16.14.210/32
+  #         Description: SMTP TLS to mail server
+  #     Tags:
+  #       - Key: Name
+  #         Value: !Sub 'cloudwatch-alarm-processor-sg-${Client}-${Region}-${Environment}'
+
+  # # Queue Experience Utility Security Group
+  # QueueExperienceUtilitySecurityGroup:
+  #   Type: AWS::EC2::SecurityGroup
+  #   Properties:
+  #     GroupDescription: Security group for Queue Experience Utility Lambda
+  #     VpcId:
+  #       Fn::ImportValue: !Sub '${VPCStackName}-VPC-ID'
+  #     SecurityGroupIngress:
+  #       - IpProtocol: tcp
+  #         FromPort: 443
+  #         ToPort: 443
+  #         CidrIp: 10.113.0.0/16
+  #         Description: HTTPS from VPC
+  #     SecurityGroupEgress:
+  #       - IpProtocol: tcp
+  #         FromPort: 443
+  #         ToPort: 443
+  #         CidrIp: 10.113.0.0/16
+  #         Description: HTTPS to VPC
+  #     Tags:
+  #       - Key: Name
+  #         Value: !Sub 'queue-experience-utility-sg-${Client}-${Region}-${Environment}'
+
+  # # Contact Prechecks Utility Security Group
+  # ContactPrechecksUtilitySecurityGroup:
+  #   Type: AWS::EC2::SecurityGroup
+  #   Properties:
+  #     GroupDescription: Security group for Contact Prechecks Utility Lambda
+  #     VpcId:
+  #       Fn::ImportValue: !Sub '${VPCStackName}-VPC-ID'
+  #     SecurityGroupIngress:
+  #       - IpProtocol: tcp
+  #         FromPort: 443
+  #         ToPort: 443
+  #         CidrIp: 10.113.0.0/16
+  #         Description: HTTPS from VPC
+  #     SecurityGroupEgress:
+  #       - IpProtocol: tcp
+  #         FromPort: 443
+  #         ToPort: 443
+  #         CidrIp: 10.113.0.0/16
+  #         Description: HTTPS to VPC
+  #     Tags:
+  #       - Key: Name
+  #         Value: !Sub 'contact-prechecks-utility-sg-${Client}-${Region}-${Environment}'
+
+  # # CTR Processor Security Group
+  # CTRProcessorSecurityGroup:
+  #   Type: AWS::EC2::SecurityGroup
+  #   Properties:
+  #     GroupDescription: Security group for CTR Processor Lambda
+  #     VpcId:
+  #       Fn::ImportValue: !Sub '${VPCStackName}-VPC-ID'
+  #     SecurityGroupIngress:
+  #       - IpProtocol: tcp
+  #         FromPort: 443
+  #         ToPort: 443
+  #         CidrIp: 10.113.0.0/16
+  #         Description: HTTPS from VPC
+  #     SecurityGroupEgress:
+  #       - IpProtocol: tcp
+  #         FromPort: 443
+  #         ToPort: 443
+  #         CidrIp: 10.113.0.0/16
+  #         Description: HTTPS to VPC
+  #       - IpProtocol: tcp
+  #         FromPort: 25
+  #         ToPort: 25
+  #         CidrIp: 172.16.14.210/32
+  #         Description: SMTP to mail server
+  #       - IpProtocol: tcp
+  #         FromPort: 587
+  #         ToPort: 587
+  #         CidrIp: 172.16.14.210/32
+  #         Description: SMTP TLS to mail server
+  #       - IpProtocol: tcp
+  #         FromPort: 53
+  #         ToPort: 53
+  #         CidrIp: 10.0.0.0/8
+  #         Description: DNS resolution
+  #     Tags:
+  #       - Key: Name
+  #         Value: !Sub 'ctr-processor-sg-${Client}-${Region}-${Environment}'
+
+  # # Post Call Survey Utility Security Group
+  # PostCallSurveyUtilitySecurityGroup:
+  #   Type: AWS::EC2::SecurityGroup
+  #   Properties:
+  #     GroupDescription: Security group for Post Call Survey Utility Lambda
+  #     VpcId:
+  #       Fn::ImportValue: !Sub '${VPCStackName}-VPC-ID'
+  #     SecurityGroupEgress:
+  #       - IpProtocol: tcp
+  #         FromPort: 443
+  #         ToPort: 443
+  #         CidrIp: 0.0.0.0/0
+  #         Description: HTTPS outbound
+  #     Tags:
+  #       - Key: Name
+  #         Value: !Sub 'post-call-survey-utility-sg-${Client}-${Region}-${Environment}'
+
+  # # Insurance Identification Trigger Security Group
+  # InsuranceIdentificationTriggerSecurityGroup:
+  #   Type: AWS::EC2::SecurityGroup
+  #   Properties:
+  #     GroupDescription: Security group for Insurance Identification Trigger Lambda
+  #     VpcId:
+  #       Fn::ImportValue: !Sub '${VPCStackName}-VPC-ID'
+  #     SecurityGroupIngress:
+  #       - IpProtocol: tcp
+  #         FromPort: 443
+  #         ToPort: 443
+  #         CidrIp: 10.113.0.0/16
+  #         Description: HTTPS from VPC
+  #     SecurityGroupEgress:
+  #       - IpProtocol: tcp
+  #         FromPort: 443
+  #         ToPort: 443
+  #         CidrIp: 10.113.0.0/16
+  #         Description: HTTPS to VPC
+  #     Tags:
+  #       - Key: Name
+  #         Value: !Sub 'insurance-identification-trigger-sg-${Client}-${Region}-${Environment}'
+
+  # # Insurance Services Security Group
+  # InsuranceServicesSecurityGroup:
+  #   Type: AWS::EC2::SecurityGroup
+  #   Properties:
+  #     GroupDescription: Security group for Insurance Services Lambda
+  #     VpcId:
+  #       Fn::ImportValue: !Sub '${VPCStackName}-VPC-ID'
+  #     SecurityGroupIngress:
+  #       - IpProtocol: tcp
+  #         FromPort: 443
+  #         ToPort: 443
+  #         CidrIp: 10.113.0.0/16
+  #         Description: HTTPS from VPC
+  #     SecurityGroupEgress:
+  #       - IpProtocol: tcp
+  #         FromPort: 443
+  #         ToPort: 443
+  #         CidrIp: 10.113.0.0/16
+  #         Description: HTTPS to VPC
+  #     Tags:
+  #       - Key: Name
+  #         Value: !Sub 'insurance-services-sg-${Client}-${Region}-${Environment}'
+
+Outputs:
+  CommandCenterLambdaName:
+    Description: Command Center Lambda Function Name
+    Value: !Ref CommandCenterLambda
+    Export:
+      Name: !Sub '${AWS::StackName}-CommandCenterLambda'
+
+  CommandCenterLambdaArn:
+    Description: Command Center Lambda Function ARN
+    Value: !GetAtt CommandCenterLambda.Arn
+    Export:
+      Name: !Sub '${AWS::StackName}-CommandCenterLambdaArn'
+
+  CommandCenterSecurityGroupId:
+    Description: Command Center Security Group ID
+    Value: !Ref CommandCenterSecurityGroup
+    Export:
+      Name: !Sub '${AWS::StackName}-CommandCenterSecurityGroup'
+
+  OutboundContactPrecheckUtilityLambdaName:
+    Description: Outbound Contact Precheck Utility Lambda Function Name
+    Value: !Ref OutboundContactPrecheckUtilityLambda
+    Export:
+      Name: !Sub '${AWS::StackName}-OutboundContactPrecheckUtilityLambda'
+
+  OutboundContactPrecheckUtilityLambdaArn:
+    Description: Outbound Contact Precheck Utility Lambda Function ARN
+    Value: !GetAtt OutboundContactPrecheckUtilityLambda.Arn
+    Export:
+      Name: !Sub '${AWS::StackName}-OutboundContactPrecheckUtilityLambdaArn'
+
+  AgentDesktopLayerArn:
+    Description: Agent Desktop Layer ARN
+    Value: !Ref AgentDesktopLayer
+    Export:
+      Name: !Sub '${AWS::StackName}-AgentDesktopLayer'

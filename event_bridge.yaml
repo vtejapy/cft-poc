@@ -1,0 +1,82 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: 'EventBridge rules and targets for contact center events'
+
+Parameters:
+  Environment:
+    Type: String
+    Default: dev
+    AllowedValues: [dev, stg, prod]
+    Description: Environment name
+
+  Region:
+    Type: String
+    Default: us-east-1
+    Description: AWS region for deployment
+
+  Client:
+    Type: String
+    Default: gen-client5
+    Description: Client name
+
+  CostCenter:
+    Type: String
+    Default: '1003'
+    Description: Cost center for billing tags
+
+  OutboundContactPrecheckLambdaArn:
+    Type: String
+    Description: ARN of the Outbound Contact Precheck Lambda function
+
+Resources:
+  # ====================
+  # EVENTBRIDGE RULE
+  # ====================
+  
+  OutboundContactEventRule:
+    Type: AWS::Events::Rule
+    Properties:
+      Name: !Sub 'outbound-contact-event-rule-${Client}-${Region}-${Environment}'
+      Description: 'rule to trigger 911 disconnect Lambda function'
+      ScheduleExpression: 'cron(0 */3 * * ? *)'
+      State: ENABLED
+      Targets:
+        - Arn: !Ref OutboundContactPrecheckLambdaArn
+          Id: !Sub 'outbound-contact-event-trigger-${Client}-${Region}-${Environment}'
+      EventBusName: default
+      Tags:
+        - Key: Name
+          Value: !Sub 'outbound-contact-event-rule-${Client}-${Region}-${Environment}'
+        - Key: environment
+          Value: !Ref Environment
+        - Key: costCenter
+          Value: !Ref CostCenter
+        - Key: appService
+          Value: !Ref Client
+        - Key: deployedBy
+          Value: cloudformation
+
+  # ====================
+  # LAMBDA PERMISSIONS
+  # ====================
+  
+  OutboundContactPrecheckEventBridgePermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref OutboundContactPrecheckLambdaArn
+      Action: lambda:InvokeFunction
+      Principal: events.amazonaws.com
+      SourceArn: !GetAtt OutboundContactEventRule.Arn
+      StatementId: outboundContactTrigger
+
+Outputs:
+  OutboundContactEventRuleArn:
+    Description: Outbound Contact Event Rule ARN
+    Value: !GetAtt OutboundContactEventRule.Arn
+    Export:
+      Name: !Sub '${AWS::StackName}-OutboundContactEventRuleArn'
+
+  OutboundContactEventRuleName:
+    Description: Outbound Contact Event Rule Name
+    Value: !Ref OutboundContactEventRule
+    Export:
+      Name: !Sub '${AWS::StackName}-OutboundContactEventRuleName'

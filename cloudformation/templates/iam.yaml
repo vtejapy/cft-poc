@@ -1,0 +1,717 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: 'IAM roles and policies for Lambda functions'
+
+Parameters:
+  Environment:
+    Type: String
+    Default: dev
+    AllowedValues: [dev, stg, prod]
+    Description: Environment name
+
+  Region:
+    Type: String
+    Default: us-east-1
+    Description: AWS region for deployment
+
+  Client:
+    Type: String
+    Default: gen-client5
+    Description: Client name
+
+  CostCenter:
+    Type: String
+    Default: '1003'
+    Description: Cost center for billing tags
+
+  ConnectInstanceArn:
+    Type: String
+    Description: Amazon Connect instance ARN
+
+  DatabaseSecretArn:
+    Type: String
+    Description: RDS database secret ARN
+
+Resources:
+  # ====================
+  # COMMON LOGGING POLICY
+  # ====================
+  
+  CommonLoggingPolicy:
+    Type: AWS::IAM::ManagedPolicy
+    Properties:
+      ManagedPolicyName: !Sub 'common-logging-policy-${Client}-${Region}-${Environment}'
+      Description: Common logging policy for all Lambda functions
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Action:
+              - logs:CreateLogGroup
+              - logs:CreateLogStream
+              - logs:PutLogEvents
+            Resource: !Sub 'arn:aws:logs:${Region}:${AWS::AccountId}:log-group:/aws/lambda/*'
+
+  # ====================
+  # COMMAND CENTER LAMBDA ROLE AND POLICY
+  # ====================
+  
+  CommandCenterLambdaRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub 'command-center-lambda-role-${Client}-${Region}-${Environment}'
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+            Sid: CCenterLambdaAccess
+      ManagedPolicyArns:
+        - !Ref CommonLoggingPolicy
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaVPCAccessExecutionRole
+      Policies:
+        - PolicyName: CommandCenterPolicy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - connect:ListPhoneNumbers
+                  - connect:DescribeQueue
+                  - secretsmanager:GetSecretValue
+                  - connect:SearchQueues
+                  - secretsmanager:DescribeSecret
+                  - connect:ListUsers
+                  - rds:DescribeDBInstances
+                  - connect:DescribeUser
+                  - connect:SearchUsers
+                  - connect:ListContactFlows
+                  - apigateway:GET
+                Resource:
+                  - !Sub 'arn:aws:rds:${Region}:${AWS::AccountId}:db:db-*'
+                  - !Sub '${ConnectInstanceArn}/contact-flow/*'
+                  - !Sub '${ConnectInstanceArn}/phone-number/*'
+                  - !Sub '${ConnectInstanceArn}/queue/*'
+                  - !Ref ConnectInstanceArn
+                  - !Sub '${ConnectInstanceArn}/agent/*'
+                  - !Sub 'arn:aws:apigateway:${Region}:${AWS::AccountId}:/apis*'
+                  - !Ref DatabaseSecretArn
+              - Effect: Allow
+                Action:
+                  - connect:ListQueues
+                  - apigateway:GET
+                Resource:
+                  - !Sub 'arn:aws:apigateway:${Region}:${AWS::AccountId}:/apis*'
+                  - !Sub '${ConnectInstanceArn}/queue/*'
+      Tags:
+        - Key: Name
+          Value: !Sub 'command-center-lambda-role-${Client}-${Region}-${Environment}'
+        - Key: environment
+          Value: !Ref Environment
+        - Key: costCenter
+          Value: !Ref CostCenter
+        - Key: appService
+          Value: !Ref Client
+        - Key: deployedBy
+          Value: cloudformation
+
+  # ====================
+  # COMMENTED OUT IAM ROLES AND POLICIES (FOR FUTURE USE)
+  # ====================
+  # Uncomment and configure these roles as needed
+  
+  # # Contact Center Core API Lambda Role
+  # ContactCenterCoreAPILambdaRole:
+  #   Type: AWS::IAM::Role
+  #   Properties:
+  #     RoleName: !Sub 'contact-center-core-api-lambda-role-${Client}-${Region}-${Environment}'
+  #     AssumeRolePolicyDocument:
+  #       Version: '2012-10-17'
+  #       Statement:
+  #         - Effect: Allow
+  #           Principal:
+  #             Service: lambda.amazonaws.com
+  #           Action: sts:AssumeRole
+  #     ManagedPolicyArns:
+  #       - !Ref CommonLoggingPolicy
+  #       - arn:aws:iam::aws:policy/service-role/AWSLambdaVPCAccessExecutionRole
+  #     Policies:
+  #       - PolicyName: ContactCenterCoreAPIPolicy
+  #         PolicyDocument:
+  #           Version: '2012-10-17'
+  #           Statement:
+  #             - Effect: Allow
+  #               Action:
+  #                 - connect:*
+  #                 - secretsmanager:GetSecretValue
+  #                 - secretsmanager:DescribeSecret
+  #                 - rds:DescribeDBInstances
+  #                 - s3:GetObject
+  #                 - s3:PutObject
+  #               Resource:
+  #                 - !Sub 'arn:aws:rds:${Region}:${AWS::AccountId}:db:db-*'
+  #                 - !Sub '${ConnectInstanceArn}/*'
+  #                 - !Ref DatabaseSecretArn
+  #                 - !Sub 'arn:aws:s3:::*-${Client}-${Region}-${Environment}/*'
+  #     Tags:
+  #       - Key: Name
+  #         Value: !Sub 'contact-center-core-api-lambda-role-${Client}-${Region}-${Environment}'
+  #       - Key: environment
+  #         Value: !Ref Environment
+  #       - Key: costCenter
+  #         Value: !Ref CostCenter
+  #       - Key: appService
+  #         Value: !Ref Client
+  #       - Key: deployedBy
+  #         Value: cloudformation
+
+  # # KVS Recording Processor Lambda Role
+  # KVSRecordingProcessorLambdaRole:
+  #   Type: AWS::IAM::Role
+  #   Properties:
+  #     RoleName: !Sub 'kvs-recording-processor-lambda-role-${Client}-${Region}-${Environment}'
+  #     AssumeRolePolicyDocument:
+  #       Version: '2012-10-17'
+  #       Statement:
+  #         - Effect: Allow
+  #           Principal:
+  #             Service: lambda.amazonaws.com
+  #           Action: sts:AssumeRole
+  #     ManagedPolicyArns:
+  #       - !Ref CommonLoggingPolicy
+  #       - arn:aws:iam::aws:policy/service-role/AWSLambdaVPCAccessExecutionRole
+  #     Policies:
+  #       - PolicyName: KVSRecordingProcessorPolicy
+  #         PolicyDocument:
+  #           Version: '2012-10-17'
+  #           Statement:
+  #             - Effect: Allow
+  #               Action:
+  #                 - kinesisvideo:*
+  #                 - s3:GetObject
+  #                 - s3:PutObject
+  #                 - s3:DeleteObject
+  #                 - transcribe:*
+  #                 - secretsmanager:GetSecretValue
+  #                 - secretsmanager:DescribeSecret
+  #                 - rds:DescribeDBInstances
+  #               Resource:
+  #                 - !Sub 'arn:aws:kinesisvideo:${Region}:${AWS::AccountId}:stream/*'
+  #                 - !Sub 'arn:aws:s3:::*-${Client}-${Region}-${Environment}/*'
+  #                 - !Sub 'arn:aws:transcribe:${Region}:${AWS::AccountId}:*'
+  #                 - !Ref DatabaseSecretArn
+  #                 - !Sub 'arn:aws:rds:${Region}:${AWS::AccountId}:db:db-*'
+  #     Tags:
+  #       - Key: Name
+  #         Value: !Sub 'kvs-recording-processor-lambda-role-${Client}-${Region}-${Environment}'
+  #       - Key: environment
+  #         Value: !Ref Environment
+  #       - Key: costCenter
+  #         Value: !Ref CostCenter
+  #       - Key: appService
+  #         Value: !Ref Client
+  #       - Key: deployedBy
+  #         Value: cloudformation
+
+  # # Post Call Survey Utility Lambda Role
+  # PostCallSurveyUtilityLambdaRole:
+  #   Type: AWS::IAM::Role
+  #   Properties:
+  #     RoleName: !Sub 'post-call-survey-utility-lambda-role-${Client}-${Region}-${Environment}'
+  #     AssumeRolePolicyDocument:
+  #       Version: '2012-10-17'
+  #       Statement:
+  #         - Effect: Allow
+  #           Principal:
+  #             Service: lambda.amazonaws.com
+  #           Action: sts:AssumeRole
+  #     ManagedPolicyArns:
+  #       - !Ref CommonLoggingPolicy
+  #       - arn:aws:iam::aws:policy/service-role/AWSLambdaVPCAccessExecutionRole
+  #     Policies:
+  #       - PolicyName: PostCallSurveyUtilityPolicy
+  #         PolicyDocument:
+  #           Version: '2012-10-17'
+  #           Statement:
+  #             - Effect: Allow
+  #               Action:
+  #                 - secretsmanager:GetSecretValue
+  #                 - secretsmanager:DescribeSecret
+  #                 - rds:DescribeDBInstances
+  #                 - s3:GetObject
+  #                 - s3:PutObject
+  #               Resource:
+  #                 - !Ref DatabaseSecretArn
+  #                 - !Sub 'arn:aws:rds:${Region}:${AWS::AccountId}:db:db-*'
+  #                 - !Sub 'arn:aws:s3:::*-${Client}-${Region}-${Environment}/*'
+  #     Tags:
+  #       - Key: Name
+  #         Value: !Sub 'post-call-survey-utility-lambda-role-${Client}-${Region}-${Environment}'
+  #       - Key: environment
+  #         Value: !Ref Environment
+  #       - Key: costCenter
+  #         Value: !Ref CostCenter
+  #       - Key: appService
+  #         Value: !Ref Client
+  #       - Key: deployedBy
+  #         Value: cloudformation
+
+  # # Queue Experience Lambda Role
+  # QueueExperienceLambdaRole:
+  #   Type: AWS::IAM::Role
+  #   Properties:
+  #     RoleName: !Sub 'queue-experience-lambda-role-${Client}-${Region}-${Environment}'
+  #     AssumeRolePolicyDocument:
+  #       Version: '2012-10-17'
+  #       Statement:
+  #         - Effect: Allow
+  #           Principal:
+  #             Service: lambda.amazonaws.com
+  #           Action: sts:AssumeRole
+  #     ManagedPolicyArns:
+  #       - !Ref CommonLoggingPolicy
+  #       - arn:aws:iam::aws:policy/service-role/AWSLambdaVPCAccessExecutionRole
+  #     Policies:
+  #       - PolicyName: QueueExperiencePolicy
+  #         PolicyDocument:
+  #           Version: '2012-10-17'
+  #           Statement:
+  #             - Effect: Allow
+  #               Action:
+  #                 - connect:*
+  #                 - dynamodb:*
+  #                 - secretsmanager:GetSecretValue
+  #                 - secretsmanager:DescribeSecret
+  #                 - rds:DescribeDBInstances
+  #               Resource:
+  #                 - !Sub '${ConnectInstanceArn}/*'
+  #                 - !Sub 'arn:aws:dynamodb:${Region}:${AWS::AccountId}:table/queue-experience-db-${Client}-${Region}-${Environment}'
+  #                 - !Ref DatabaseSecretArn
+  #                 - !Sub 'arn:aws:rds:${Region}:${AWS::AccountId}:db:db-*'
+  #     Tags:
+  #       - Key: Name
+  #         Value: !Sub 'queue-experience-lambda-role-${Client}-${Region}-${Environment}'
+  #       - Key: environment
+  #         Value: !Ref Environment
+  #       - Key: costCenter
+  #         Value: !Ref CostCenter
+  #       - Key: appService
+  #         Value: !Ref Client
+  #       - Key: deployedBy
+  #         Value: cloudformation
+
+  # # Holiday Emergency Lambda Role
+  # HolidayEmergencyLambdaRole:
+  #   Type: AWS::IAM::Role
+  #   Properties:
+  #     RoleName: !Sub 'holiday-emergency-lambda-role-${Client}-${Region}-${Environment}'
+  #     AssumeRolePolicyDocument:
+  #       Version: '2012-10-17'
+  #       Statement:
+  #         - Effect: Allow
+  #           Principal:
+  #             Service: lambda.amazonaws.com
+  #           Action: sts:AssumeRole
+  #     ManagedPolicyArns:
+  #       - !Ref CommonLoggingPolicy
+  #       - arn:aws:iam::aws:policy/service-role/AWSLambdaVPCAccessExecutionRole
+  #     Policies:
+  #       - PolicyName: HolidayEmergencyPolicy
+  #         PolicyDocument:
+  #           Version: '2012-10-17'
+  #           Statement:
+  #             - Effect: Allow
+  #               Action:
+  #                 - connect:*
+  #                 - secretsmanager:GetSecretValue
+  #                 - secretsmanager:DescribeSecret
+  #                 - rds:DescribeDBInstances
+  #               Resource:
+  #                 - !Sub '${ConnectInstanceArn}/*'
+  #                 - !Ref DatabaseSecretArn
+  #                 - !Sub 'arn:aws:rds:${Region}:${AWS::AccountId}:db:db-*'
+  #     Tags:
+  #       - Key: Name
+  #         Value: !Sub 'holiday-emergency-lambda-role-${Client}-${Region}-${Environment}'
+  #       - Key: environment
+  #         Value: !Ref Environment
+  #       - Key: costCenter
+  #         Value: !Ref CostCenter
+  #       - Key: appService
+  #         Value: !Ref Client
+  #       - Key: deployedBy
+  #         Value: cloudformation
+
+  # # CTR Processor Lambda Role
+  # CTRProcessorLambdaRole:
+  #   Type: AWS::IAM::Role
+  #   Properties:
+  #     RoleName: !Sub 'ctr-processor-lambda-role-${Client}-${Region}-${Environment}'
+  #     AssumeRolePolicyDocument:
+  #       Version: '2012-10-17'
+  #       Statement:
+  #         - Effect: Allow
+  #           Principal:
+  #             Service: lambda.amazonaws.com
+  #           Action: sts:AssumeRole
+  #     ManagedPolicyArns:
+  #       - !Ref CommonLoggingPolicy
+  #       - arn:aws:iam::aws:policy/service-role/AWSLambdaVPCAccessExecutionRole
+  #     Policies:
+  #       - PolicyName: CTRProcessorPolicy
+  #         PolicyDocument:
+  #           Version: '2012-10-17'
+  #           Statement:
+  #             - Effect: Allow
+  #               Action:
+  #                 - kinesis:*
+  #                 - s3:GetObject
+  #                 - s3:PutObject
+  #                 - s3:DeleteObject
+  #                 - secretsmanager:GetSecretValue
+  #                 - secretsmanager:DescribeSecret
+  #                 - rds:DescribeDBInstances
+  #               Resource:
+  #                 - !Sub 'arn:aws:kinesis:${Region}:${AWS::AccountId}:stream/*'
+  #                 - !Sub 'arn:aws:s3:::*-${Client}-${Region}-${Environment}/*'
+  #                 - !Ref DatabaseSecretArn
+  #                 - !Sub 'arn:aws:rds:${Region}:${AWS::AccountId}:db:db-*'
+  #     Tags:
+  #       - Key: Name
+  #         Value: !Sub 'ctr-processor-lambda-role-${Client}-${Region}-${Environment}'
+  #       - Key: environment
+  #         Value: !Ref Environment
+  #       - Key: costCenter
+  #         Value: !Ref CostCenter
+  #       - Key: appService
+  #         Value: !Ref Client
+  #       - Key: deployedBy
+  #         Value: cloudformation
+
+  # # Voicemail Notification Lambda Role
+  # VoicemailNotificationLambdaRole:
+  #   Type: AWS::IAM::Role
+  #   Properties:
+  #     RoleName: !Sub 'voicemail-notification-lambda-role-${Client}-${Region}-${Environment}'
+  #     AssumeRolePolicyDocument:
+  #       Version: '2012-10-17'
+  #       Statement:
+  #         - Effect: Allow
+  #           Principal:
+  #             Service: lambda.amazonaws.com
+  #           Action: sts:AssumeRole
+  #     ManagedPolicyArns:
+  #       - !Ref CommonLoggingPolicy
+  #       - arn:aws:iam::aws:policy/service-role/AWSLambdaVPCAccessExecutionRole
+  #     Policies:
+  #       - PolicyName: VoicemailNotificationPolicy
+  #         PolicyDocument:
+  #           Version: '2012-10-17'
+  #           Statement:
+  #             - Effect: Allow
+  #               Action:
+  #                 - kinesis:*
+  #                 - s3:GetObject
+  #                 - s3:PutObject
+  #                 - ses:SendEmail
+  #                 - ses:SendRawEmail
+  #                 - secretsmanager:GetSecretValue
+  #                 - secretsmanager:DescribeSecret
+  #                 - rds:DescribeDBInstances
+  #               Resource:
+  #                 - !Sub 'arn:aws:kinesis:${Region}:${AWS::AccountId}:stream/*'
+  #                 - !Sub 'arn:aws:s3:::*-${Client}-${Region}-${Environment}/*'
+  #                 - !Sub 'arn:aws:ses:${Region}:${AWS::AccountId}:*'
+  #                 - !Ref DatabaseSecretArn
+  #                 - !Sub 'arn:aws:rds:${Region}:${AWS::AccountId}:db:db-*'
+  #     Tags:
+  #       - Key: Name
+  #         Value: !Sub 'voicemail-notification-lambda-role-${Client}-${Region}-${Environment}'
+  #       - Key: environment
+  #         Value: !Ref Environment
+  #       - Key: costCenter
+  #         Value: !Ref CostCenter
+  #       - Key: appService
+  #         Value: !Ref Client
+  #       - Key: deployedBy
+  #         Value: cloudformation
+
+  # # Insurance Identification Trigger Lambda Role
+  # InsuranceIdentificationTriggerLambdaRole:
+  #   Type: AWS::IAM::Role
+  #   Properties:
+  #     RoleName: !Sub 'insurance-identification-trigger-lambda-role-${Client}-${Region}-${Environment}'
+  #     AssumeRolePolicyDocument:
+  #       Version: '2012-10-17'
+  #       Statement:
+  #         - Effect: Allow
+  #           Principal:
+  #             Service: lambda.amazonaws.com
+  #           Action: sts:AssumeRole
+  #     ManagedPolicyArns:
+  #       - !Ref CommonLoggingPolicy
+  #       - arn:aws:iam::aws:policy/service-role/AWSLambdaVPCAccessExecutionRole
+  #     Policies:
+  #       - PolicyName: InsuranceIdentificationTriggerPolicy
+  #         PolicyDocument:
+  #           Version: '2012-10-17'
+  #           Statement:
+  #             - Effect: Allow
+  #               Action:
+  #                 - connect:*
+  #                 - secretsmanager:GetSecretValue
+  #                 - secretsmanager:DescribeSecret
+  #                 - rds:DescribeDBInstances
+  #               Resource:
+  #                 - !Sub '${ConnectInstanceArn}/*'
+  #                 - !Ref DatabaseSecretArn
+  #                 - !Sub 'arn:aws:rds:${Region}:${AWS::AccountId}:db:db-*'
+  #     Tags:
+  #       - Key: Name
+  #         Value: !Sub 'insurance-identification-trigger-lambda-role-${Client}-${Region}-${Environment}'
+  #       - Key: environment
+  #         Value: !Ref Environment
+  #       - Key: costCenter
+  #         Value: !Ref CostCenter
+  #       - Key: appService
+  #         Value: !Ref Client
+  #       - Key: deployedBy
+  #         Value: cloudformation
+
+  # # Insurance Services Lambda Role
+  # InsuranceServicesLambdaRole:
+  #   Type: AWS::IAM::Role
+  #   Properties:
+  #     RoleName: !Sub 'insurance-services-lambda-role-${Client}-${Region}-${Environment}'
+  #     AssumeRolePolicyDocument:
+  #       Version: '2012-10-17'
+  #       Statement:
+  #         - Effect: Allow
+  #           Principal:
+  #             Service: lambda.amazonaws.com
+  #           Action: sts:AssumeRole
+  #     ManagedPolicyArns:
+  #       - !Ref CommonLoggingPolicy
+  #       - arn:aws:iam::aws:policy/service-role/AWSLambdaVPCAccessExecutionRole
+  #     Policies:
+  #       - PolicyName: InsuranceServicesPolicy
+  #         PolicyDocument:
+  #           Version: '2012-10-17'
+  #           Statement:
+  #             - Effect: Allow
+  #               Action:
+  #                 - connect:*
+  #                 - secretsmanager:GetSecretValue
+  #                 - secretsmanager:DescribeSecret
+  #                 - rds:DescribeDBInstances
+  #               Resource:
+  #                 - !Sub '${ConnectInstanceArn}/*'
+  #                 - !Ref DatabaseSecretArn
+  #                 - !Sub 'arn:aws:rds:${Region}:${AWS::AccountId}:db:db-*'
+  #     Tags:
+  #       - Key: Name
+  #         Value: !Sub 'insurance-services-lambda-role-${Client}-${Region}-${Environment}'
+  #       - Key: environment
+  #         Value: !Ref Environment
+  #       - Key: costCenter
+  #         Value: !Ref CostCenter
+  #       - Key: appService
+  #         Value: !Ref Client
+  #       - Key: deployedBy
+  #         Value: cloudformation
+
+  # # Contact Prechecks Utility Lambda Role
+  # ContactPrechecksUtilityLambdaRole:
+  #   Type: AWS::IAM::Role
+  #   Properties:
+  #     RoleName: !Sub 'contact-prechecks-utility-lambda-role-${Client}-${Region}-${Environment}'
+  #     AssumeRolePolicyDocument:
+  #       Version: '2012-10-17'
+  #       Statement:
+  #         - Effect: Allow
+  #           Principal:
+  #             Service: lambda.amazonaws.com
+  #           Action: sts:AssumeRole
+  #     ManagedPolicyArns:
+  #       - !Ref CommonLoggingPolicy
+  #       - arn:aws:iam::aws:policy/service-role/AWSLambdaVPCAccessExecutionRole
+  #     Policies:
+  #       - PolicyName: ContactPrechecksUtilityPolicy
+  #         PolicyDocument:
+  #           Version: '2012-10-17'
+  #           Statement:
+  #             - Effect: Allow
+  #               Action:
+  #                 - connect:*
+  #                 - secretsmanager:GetSecretValue
+  #                 - secretsmanager:DescribeSecret
+  #                 - rds:DescribeDBInstances
+  #               Resource:
+  #                 - !Sub '${ConnectInstanceArn}/*'
+  #                 - !Ref DatabaseSecretArn
+  #                 - !Sub 'arn:aws:rds:${Region}:${AWS::AccountId}:db:db-*'
+  #     Tags:
+  #       - Key: Name
+  #         Value: !Sub 'contact-prechecks-utility-lambda-role-${Client}-${Region}-${Environment}'
+  #       - Key: environment
+  #         Value: !Ref Environment
+  #       - Key: costCenter
+  #         Value: !Ref CostCenter
+  #       - Key: appService
+  #         Value: !Ref Client
+  #       - Key: deployedBy
+  #         Value: cloudformation
+
+  # # Outbound Contact Precheck Utility Lambda Role
+  # OutboundContactPrecheckUtilityLambdaRole:
+  #   Type: AWS::IAM::Role
+  #   Properties:
+  #     RoleName: !Sub 'outbound-contact-precheck-utility-lambda-role-${Client}-${Region}-${Environment}'
+  #     AssumeRolePolicyDocument:
+  #       Version: '2012-10-17'
+  #       Statement:
+  #         - Effect: Allow
+  #           Principal:
+  #             Service: lambda.amazonaws.com
+  #           Action: sts:AssumeRole
+  #     ManagedPolicyArns:
+  #       - !Ref CommonLoggingPolicy
+  #       - arn:aws:iam::aws:policy/service-role/AWSLambdaVPCAccessExecutionRole
+  #     Policies:
+  #       - PolicyName: OutboundContactPrecheckUtilityPolicy
+  #         PolicyDocument:
+  #           Version: '2012-10-17'
+  #           Statement:
+  #             - Effect: Allow
+  #               Action:
+  #                 - connect:*
+  #                 - secretsmanager:GetSecretValue
+  #                 - secretsmanager:DescribeSecret
+  #                 - rds:DescribeDBInstances
+  #               Resource:
+  #                 - !Sub '${ConnectInstanceArn}/*'
+  #                 - !Ref DatabaseSecretArn
+  #                 - !Sub 'arn:aws:rds:${Region}:${AWS::AccountId}:db:db-*'
+  #     Tags:
+  #       - Key: Name
+  #         Value: !Sub 'outbound-contact-precheck-utility-lambda-role-${Client}-${Region}-${Environment}'
+  #       - Key: environment
+  #         Value: !Ref Environment
+  #       - Key: costCenter
+  #         Value: !Ref CostCenter
+  #       - Key: appService
+  #         Value: !Ref Client
+  #       - Key: deployedBy
+  #         Value: cloudformation
+
+  # # CloudWatch Alarm Processor Lambda Role
+  # CloudWatchAlarmProcessorLambdaRole:
+  #   Type: AWS::IAM::Role
+  #   Properties:
+  #     RoleName: !Sub 'cloudwatch-alarm-processor-lambda-role-${Client}-${Region}-${Environment}'
+  #     AssumeRolePolicyDocument:
+  #       Version: '2012-10-17'
+  #       Statement:
+  #         - Effect: Allow
+  #           Principal:
+  #             Service: lambda.amazonaws.com
+  #           Action: sts:AssumeRole
+  #     ManagedPolicyArns:
+  #       - !Ref CommonLoggingPolicy
+  #       - arn:aws:iam::aws:policy/service-role/AWSLambdaVPCAccessExecutionRole
+  #     Policies:
+  #       - PolicyName: CloudWatchAlarmProcessorPolicy
+  #         PolicyDocument:
+  #           Version: '2012-10-17'
+  #           Statement:
+  #             - Effect: Allow
+  #               Action:
+  #                 - cloudwatch:*
+  #                 - sns:Publish
+  #                 - ses:SendEmail
+  #                 - ses:SendRawEmail
+  #                 - secretsmanager:GetSecretValue
+  #                 - secretsmanager:DescribeSecret
+  #               Resource:
+  #                 - !Sub 'arn:aws:cloudwatch:${Region}:${AWS::AccountId}:alarm:*'
+  #                 - !Sub 'arn:aws:sns:${Region}:${AWS::AccountId}:*'
+  #                 - !Sub 'arn:aws:ses:${Region}:${AWS::AccountId}:*'
+  #                 - !Sub 'arn:aws:secretsmanager:${Region}:${AWS::AccountId}:secret:SMTP-*'
+  #     Tags:
+  #       - Key: Name
+  #         Value: !Sub 'cloudwatch-alarm-processor-lambda-role-${Client}-${Region}-${Environment}'
+  #       - Key: environment
+  #         Value: !Ref Environment
+  #       - Key: costCenter
+  #         Value: !Ref CostCenter
+  #       - Key: appService
+  #         Value: !Ref Client
+  #       - Key: deployedBy
+  #         Value: cloudformation
+
+  # # CloudWatch Metrics Alarm Lambda Role
+  # CloudWatchMetricsAlarmLambdaRole:
+  #   Type: AWS::IAM::Role
+  #   Properties:
+  #     RoleName: !Sub 'cloudwatch-metrics-alarm-lambda-role-${Client}-${Region}-${Environment}'
+  #     AssumeRolePolicyDocument:
+  #       Version: '2012-10-17'
+  #       Statement:
+  #         - Effect: Allow
+  #           Principal:
+  #             Service: lambda.amazonaws.com
+  #           Action: sts:AssumeRole
+  #     ManagedPolicyArns:
+  #       - !Ref CommonLoggingPolicy
+  #       - arn:aws:iam::aws:policy/service-role/AWSLambdaVPCAccessExecutionRole
+  #     Policies:
+  #       - PolicyName: CloudWatchMetricsAlarmPolicy
+  #         PolicyDocument:
+  #           Version: '2012-10-17'
+  #           Statement:
+  #             - Effect: Allow
+  #               Action:
+  #                 - cloudwatch:*
+  #                 - connect:GetMetricData
+  #                 - sns:Publish
+  #                 - ses:SendEmail
+  #                 - ses:SendRawEmail
+  #                 - secretsmanager:GetSecretValue
+  #                 - secretsmanager:DescribeSecret
+  #               Resource:
+  #                 - !Sub 'arn:aws:cloudwatch:${Region}:${AWS::AccountId}:*'
+  #                 - !Sub '${ConnectInstanceArn}/*'
+  #                 - !Sub 'arn:aws:sns:${Region}:${AWS::AccountId}:*'
+  #                 - !Sub 'arn:aws:ses:${Region}:${AWS::AccountId}:*'
+  #                 - !Sub 'arn:aws:secretsmanager:${Region}:${AWS::AccountId}:secret:SMTP-*'
+  #     Tags:
+  #       - Key: Name
+  #         Value: !Sub 'cloudwatch-metrics-alarm-lambda-role-${Client}-${Region}-${Environment}'
+  #       - Key: environment
+  #         Value: !Ref Environment
+  #       - Key: costCenter
+  #         Value: !Ref CostCenter
+  #       - Key: appService
+  #         Value: !Ref Client
+  #       - Key: deployedBy
+  #         Value: cloudformation
+
+Outputs:
+  CommonLoggingPolicyArn:
+    Description: Common Logging Policy ARN
+    Value: !Ref CommonLoggingPolicy
+    Export:
+      Name: !Sub '${AWS::StackName}-CommonLoggingPolicy'
+
+  CommandCenterLambdaRoleArn:
+    Description: Command Center Lambda Role ARN
+    Value: !GetAtt CommandCenterLambdaRole.Arn
+    Export:
+      Name: !Sub '${AWS::StackName}-CommandCenterLambdaRole'
+
+  CommandCenterLambdaRoleName:
+    Description: Command Center Lambda Role Name
+    Value: !Ref CommandCenterLambdaRole
+    Export:
+      Name: !Sub '${AWS::StackName}-CommandCenterLambdaRoleName'
