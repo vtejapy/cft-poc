@@ -1,158 +1,50 @@
-[
-  {
-    "ParameterKey": "Environment",
-    "ParameterValue": "prod"
+{
+  "Parameters": {
+    "Environment": "prod",
+    "Client": "gen-client5",
+    "Region": "us-east-1",
+    "CostCenter": "1003",
+    "VpcCidr": "10.115.0.0/16",
+    "VpcName": "genpact-ccm",
+    "PrivateCidrOffset": "10",
+    "PublicCidrOffset": "20",
+    "CompanyName": "genpact",
+    "BaseDomain": "genpactdemos.com",
+    "ACMCertArn": "5e44efe1-86d0-4bcd-b259-41ce929556c8",
+    "RdsEngineVersion": "16.3",
+    "RdsInstanceClass": "db.r5.xlarge",
+    "RdsAllocatedStorage": "500",
+    "RdsStorageType": "gp3",
+    "RdsBackupRetentionPeriod": "30",
+    "RdsUsername": "genpactadmin",
+    "DatabasePort": "5432",
+    "SchemaName": "agent_desktop_assist",
+    "LambdaMemorySize": "512",
+    "LambdaTimeout": "300",
+    "LambdaRuntime": "python3.10",
+    "LambdaNodeJSRuntime": "nodejs18.x",
+    "LambdaNodeJS20Runtime": "nodejs20.x",
+    "RecTransExpiration": "2555",
+    "RecTransITTransition": "90",
+    "RecTransGlacierTransition": "365",
+    "AbortIncomplete": "7",
+    "CCenterExpiration": "360",
+    "ExpReportsExpiration": "180",
+    "ScreenRecExpiration": "60",
+    "VoicemailExpiration": "30",
+    "LexBotExpiration": "180",
+    "BucketLoggingExpiration": "180",
+    "SMTPFromAddress": "gnwcc-prod@genworth.com",
+    "SMTPHost": "smtp.genworth.net",
+    "SMTPPort": "587",
+    "SMTPHostname": "prod.genpact.com",
+    "ConnectAllowedOrigins": "https://prod.genpact.com"
   },
-  {
-    "ParameterKey": "Region",
-    "ParameterValue": "us-east-1"
-  },
-  {
-    "ParameterKey": "VpcCidr",
-    "ParameterValue": "10.115.0.0/16"
-  },
-  {
-    "ParameterKey": "Client",
-    "ParameterValue": "gen-client5"
-  },
-  {
-    "ParameterKey": "VpcName",
-    "ParameterValue": "genpact-ccm"
-  },
-  {
-    "ParameterKey": "PrivateCidrOffset",
-    "ParameterValue": "10"
-  },
-  {
-    "ParameterKey": "PublicCidrOffset",
-    "ParameterValue": "20"
-  },
-  {
-    "ParameterKey": "CostCenter",
-    "ParameterValue": "1003"
-  },
-  {
-    "ParameterKey": "CompanyName",
-    "ParameterValue": "genpact"
-  },
-  {
-    "ParameterKey": "BaseDomain",
-    "ParameterValue": "genpactdemos.com"
-  },
-  {
-    "ParameterKey": "ACMCertArn",
-    "ParameterValue": "5e44efe1-86d0-4bcd-b259-41ce929556c8"
-  },
-  {
-    "ParameterKey": "RdsEngineVersion",
-    "ParameterValue": "16.3"
-  },
-  {
-    "ParameterKey": "RdsInstanceClass",
-    "ParameterValue": "db.r5.xlarge"
-  },
-  {
-    "ParameterKey": "RdsAllocatedStorage",
-    "ParameterValue": "500"
-  },
-  {
-    "ParameterKey": "RdsStorageType",
-    "ParameterValue": "gp3"
-  },
-  {
-    "ParameterKey": "RdsBackupRetentionPeriod",
-    "ParameterValue": "30"
-  },
-  {
-    "ParameterKey": "RdsUsername",
-    "ParameterValue": "genpactadmin"
-  },
-  {
-    "ParameterKey": "DatabasePort",
-    "ParameterValue": "5432"
-  },
-  {
-    "ParameterKey": "SchemaName",
-    "ParameterValue": "agent_desktop_assist"
-  },
-  {
-    "ParameterKey": "LambdaMemorySize",
-    "ParameterValue": "512"
-  },
-  {
-    "ParameterKey": "LambdaTimeout",
-    "ParameterValue": "300"
-  },
-  {
-    "ParameterKey": "LambdaRuntime",
-    "ParameterValue": "python3.10"
-  },
-  {
-    "ParameterKey": "LambdaNodeJSRuntime",
-    "ParameterValue": "nodejs18.x"
-  },
-  {
-    "ParameterKey": "LambdaNodeJS20Runtime",
-    "ParameterValue": "nodejs20.x"
-  },
-  {
-    "ParameterKey": "RecTransExpiration",
-    "ParameterValue": "2555"
-  },
-  {
-    "ParameterKey": "RecTransITTransition",
-    "ParameterValue": "90"
-  },
-  {
-    "ParameterKey": "RecTransGlacierTransition",
-    "ParameterValue": "365"
-  },
-  {
-    "ParameterKey": "AbortIncomplete",
-    "ParameterValue": "7"
-  },
-  {
-    "ParameterKey": "CCenterExpiration",
-    "ParameterValue": "360"
-  },
-  {
-    "ParameterKey": "ExpReportsExpiration",
-    "ParameterValue": "180"
-  },
-  {
-    "ParameterKey": "ScreenRecExpiration",
-    "ParameterValue": "60"
-  },
-  {
-    "ParameterKey": "VoicemailExpiration",
-    "ParameterValue": "30"
-  },
-  {
-    "ParameterKey": "LexBotExpiration",
-    "ParameterValue": "180"
-  },
-  {
-    "ParameterKey": "BucketLoggingExpiration",
-    "ParameterValue": "180"
-  },
-  {
-    "ParameterKey": "SMTPFromAddress",
-    "ParameterValue": "gnwcc-prod@genworth.com"
-  },
-  {
-    "ParameterKey": "SMTPHost",
-    "ParameterValue": "smtp.genworth.net"
-  },
-  {
-    "ParameterKey": "SMTPPort",
-    "ParameterValue": "587"
-  },
-  {
-    "ParameterKey": "SMTPHostname",
-    "ParameterValue": "prod.genpact.com"
-  },
-  {
-    "ParameterKey": "ConnectAllowedOrigins",
-    "ParameterValue": "https://prod.genpact.com"
+  "Tags": {
+    "environment": "prod",
+    "costCenter": "1003",
+    "appService": "gen-client5",
+    "deployedBy": "cloudformation",
+    "project": "genpact-poc"
   }
-]
+}

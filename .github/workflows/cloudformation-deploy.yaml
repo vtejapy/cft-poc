@@ -166,7 +166,7 @@ jobs:
           fi
           
           # Convert JSON parameters to parameter-overrides format
-          PARAMS=$(cat cloudformation/parameters/prod.json | jq -r '.[] | "\(.ParameterKey)=\(.ParameterValue)"' | paste -sd ' ')
+          PARAMS=$(cat cloudformation/parameters/prod.json | jq -r '.Parameters | to_entries[] | "\(.key)=\(.value)"' | paste -sd ' ')
           
           echo "📋 Parameters being passed:"
           echo "$PARAMS TemplatesBucketName=${{ env.TEMPLATES_BUCKET }}"

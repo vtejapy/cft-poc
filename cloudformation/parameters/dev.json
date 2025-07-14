@@ -1,82 +1,31 @@
-[
-  {
-    "ParameterKey": "Environment",
-    "ParameterValue": "dev"
+{
+  "Parameters": {
+    "Environment": "dev",
+    "Client": "gen-client5",
+    "Region": "us-east-1",
+    "CostCenter": "1003",
+    "VpcCidr": "10.113.0.0/16",
+    "VpcName": "genpact-ccm",
+    "PrivateCidrOffset": "10",
+    "PublicCidrOffset": "20",
+    "CompanyName": "genpact",
+    "BaseDomain": "genpactdemos.com",
+    "ACMCertArn": "5e44efe1-86d0-4bcd-b259-41ce929556c8",
+    "RecTransExpiration": "2555",
+    "RecTransITTransition": "90",
+    "RecTransGlacierTransition": "365",
+    "AbortIncomplete": "7",
+    "ExpReportsExpiration": "180",
+    "ScreenRecExpiration": "60",
+    "VoicemailExpiration": "30",
+    "LexBotExpiration": "180",
+    "BucketLoggingExpiration": "180"
   },
-  {
-    "ParameterKey": "Region",
-    "ParameterValue": "us-east-1"
-  },
-  {
-    "ParameterKey": "VpcCidr",
-    "ParameterValue": "10.113.0.0/16"
-  },
-  {
-    "ParameterKey": "Client",
-    "ParameterValue": "gen-client5"
-  },
-  {
-    "ParameterKey": "VpcName",
-    "ParameterValue": "genpact-ccm"
-  },
-  {
-    "ParameterKey": "PrivateCidrOffset",
-    "ParameterValue": "10"
-  },
-  {
-    "ParameterKey": "PublicCidrOffset",
-    "ParameterValue": "20"
-  },
-  {
-    "ParameterKey": "CostCenter",
-    "ParameterValue": "1003"
-  },
-  {
-    "ParameterKey": "CompanyName",
-    "ParameterValue": "genpact"
-  },
-  {
-    "ParameterKey": "BaseDomain",
-    "ParameterValue": "genpactdemos.com"
-  },
-  {
-    "ParameterKey": "ACMCertArn",
-    "ParameterValue": "5e44efe1-86d0-4bcd-b259-41ce929556c8"
-  },
-  {
-    "ParameterKey": "RecTransExpiration",
-    "ParameterValue": "2555"
-  },
-  {
-    "ParameterKey": "RecTransITTransition",
-    "ParameterValue": "90"
-  },
-  {
-    "ParameterKey": "RecTransGlacierTransition",
-    "ParameterValue": "365"
-  },
-  {
-    "ParameterKey": "AbortIncomplete",
-    "ParameterValue": "7"
-  },
-  {
-    "ParameterKey": "ExpReportsExpiration",
-    "ParameterValue": "180"
-  },
-  {
-    "ParameterKey": "ScreenRecExpiration",
-    "ParameterValue": "60"
-  },
-  {
-    "ParameterKey": "VoicemailExpiration",
-    "ParameterValue": "30"
-  },
-  {
-    "ParameterKey": "LexBotExpiration",
-    "ParameterValue": "180"
-  },
-  {
-    "ParameterKey": "BucketLoggingExpiration",
-    "ParameterValue": "180"
+  "Tags": {
+    "environment": "dev",
+    "costCenter": "1003",
+    "appService": "gen-client5",
+    "deployedBy": "cloudformation",
+    "project": "genpact-poc"
   }
-]
+}
