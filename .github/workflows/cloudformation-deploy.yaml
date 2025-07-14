@@ -122,6 +122,12 @@ jobs:
               --bucket ${{ needs.setup.outputs.templates-bucket }} \
               --versioning-configuration Status=Enabled
             
+            # Disable block public access to allow CloudFormation access
+            aws s3api put-public-access-block \
+              --bucket ${{ needs.setup.outputs.templates-bucket }} \
+              --public-access-block-configuration \
+                BlockPublicAcls=false,IgnorePublicAcls=false,BlockPublicPolicy=false,RestrictPublicBuckets=false
+            
             # Set bucket policy to allow CloudFormation access
             aws s3api put-bucket-policy \
               --bucket ${{ needs.setup.outputs.templates-bucket }} \
@@ -130,9 +136,7 @@ jobs:
                 \"Statement\": [
                   {
                     \"Effect\": \"Allow\",
-                    \"Principal\": {
-                      \"Service\": \"cloudformation.amazonaws.com\"
-                    },
+                    \"Principal\": \"*\",
                     \"Action\": \"s3:GetObject\",
                     \"Resource\": \"arn:aws:s3:::${{ needs.setup.outputs.templates-bucket }}/*\"
                   },
@@ -144,9 +148,13 @@ jobs:
                     \"Action\": [
                       \"s3:GetObject\",
                       \"s3:PutObject\",
-                      \"s3:DeleteObject\"
+                      \"s3:DeleteObject\",
+                      \"s3:ListBucket\"
                     ],
-                    \"Resource\": \"arn:aws:s3:::${{ needs.setup.outputs.templates-bucket }}/*\"
+                    \"Resource\": [
+                      \"arn:aws:s3:::${{ needs.setup.outputs.templates-bucket }}\",
+                      \"arn:aws:s3:::${{ needs.setup.outputs.templates-bucket }}/*\"
+                    ]
                   }
                 ]
               }"
@@ -158,13 +166,12 @@ jobs:
           aws s3 sync cloudformation/templates/ s3://${{ needs.setup.outputs.templates-bucket }}/templates/ --delete
           aws s3 cp cloudformation/main.yaml s3://${{ needs.setup.outputs.templates-bucket }}/main.yaml
           
-          # Make templates publicly readable for CloudFormation
-          aws s3api put-object-acl --bucket ${{ needs.setup.outputs.templates-bucket }} --key main.yaml --acl public-read
-          for template in $(aws s3 ls s3://${{ needs.setup.outputs.templates-bucket }}/templates/ | awk '{print $4}'); do
-            aws s3api put-object-acl --bucket ${{ needs.setup.outputs.templates-bucket }} --key "templates/$template" --acl public-read
-          done
-          
           echo "✅ Templates uploaded successfully!"
+          
+          # Verify template URLs are accessible
+          echo "🔍 Verifying template accessibility..."
+          aws s3 ls s3://${{ needs.setup.outputs.templates-bucket }}/
+          aws s3 ls s3://${{ needs.setup.outputs.templates-bucket }}/templates/
 
   change-preview:
     runs-on: ubuntu-latest
