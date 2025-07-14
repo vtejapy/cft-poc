@@ -163,7 +163,17 @@ jobs:
       - name: Upload CloudFormation templates
         run: |
           echo "📤 Uploading templates to S3..."
+          
+          # List files before upload for debugging
+          echo "🔍 Files to upload:"
+          ls -la cloudformation/
+          ls -la cloudformation/templates/
+          
+          # Upload templates
           aws s3 sync cloudformation/templates/ s3://${{ needs.setup.outputs.templates-bucket }}/templates/ --delete
+          
+          # Upload main template
+          echo "📤 Uploading main.yaml..."
           aws s3 cp cloudformation/main.yaml s3://${{ needs.setup.outputs.templates-bucket }}/main.yaml
           
           echo "✅ Templates uploaded successfully!"
@@ -172,6 +182,10 @@ jobs:
           echo "🔍 Verifying template accessibility..."
           aws s3 ls s3://${{ needs.setup.outputs.templates-bucket }}/
           aws s3 ls s3://${{ needs.setup.outputs.templates-bucket }}/templates/
+          
+          # Test main.yaml specifically
+          echo "🔍 Testing main.yaml specifically..."
+          aws s3 ls s3://${{ needs.setup.outputs.templates-bucket }}/main.yaml
 
   change-preview:
     runs-on: ubuntu-latest
@@ -217,7 +231,16 @@ jobs:
           
           # Create change set using template body instead of template URL
           echo "🔍 Creating change set with template body..."
-          TEMPLATE_BODY=$(aws s3 cp s3://${{ needs.setup.outputs.templates-bucket }}/main.yaml -)
+          
+          # Use local file directly since we have access to it
+          echo "📄 Using local template file..."
+          echo "📄 Template file contents preview:"
+          head -20 cloudformation/main.yaml
+          
+          # Update TemplatesBucketName in the template
+          sed -i "s/cloudformation-templates-bucket/${{ needs.setup.outputs.templates-bucket }}/g" cloudformation/main.yaml
+          
+          TEMPLATE_BODY=$(cat cloudformation/main.yaml)
           
           if [[ "$STACK_EXISTS" == "true" ]]; then
             aws cloudformation create-change-set \
