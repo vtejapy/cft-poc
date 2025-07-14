@@ -19,7 +19,17 @@
     "ScreenRecExpiration": "60",
     "VoicemailExpiration": "30",
     "LexBotExpiration": "180",
-    "BucketLoggingExpiration": "180"
+    "BucketLoggingExpiration": "180",
+    "DatabaseEndpoint": "placeholder-endpoint.region.rds.amazonaws.com",
+    "DatabasePort": "5432",
+    "DatabaseName": "postgres",
+    "SchemaName": "agent_desktop_assist",
+    "SecretManagerName": "rds-secret-name",
+    "ConnectInstanceId": "your-connect-instance-id",
+    "DynamoDBTableName": "queue-experience-db-gen-client5-us-east-1-dev",
+    "ContactFlowId": "your-contact-flow-id",
+    "ApiGatewayId": "your-api-gateway-id",
+    "ApiGatewayStageUrl": "https://your-api-gateway.execute-api.us-east-1.amazonaws.com/dev"
   },
   "Tags": {
     "environment": "dev",

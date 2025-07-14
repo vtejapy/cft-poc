@@ -114,6 +114,61 @@ Parameters:
     Description: S3 prefix for CloudFormation templates
     Default: templates/
 
+  # Database Parameters
+  DatabaseEndpoint:
+    Type: String
+    Description: RDS Database Endpoint
+    Default: placeholder-endpoint
+
+  DatabasePort:
+    Type: Number
+    Default: 5432
+    Description: Database port
+
+  DatabaseName:
+    Type: String
+    Default: postgres
+    Description: Database name
+
+  SchemaName:
+    Type: String
+    Default: agent_desktop_assist
+    Description: Database schema name
+
+  SecretManagerName:
+    Type: String
+    Description: RDS Secret Manager Name
+    Default: placeholder-secret
+
+  # Connect Instance
+  ConnectInstanceId:
+    Type: String
+    Description: Amazon Connect Instance ID
+    Default: placeholder-instance
+
+  # DynamoDB
+  DynamoDBTableName:
+    Type: String
+    Description: DynamoDB table name for queue experience
+    Default: queue-experience-db
+
+  # Contact Flow
+  ContactFlowId:
+    Type: String
+    Description: Connect contact flow ID
+    Default: placeholder-flow
+
+  # API Gateway
+  ApiGatewayId:
+    Type: String
+    Description: API Gateway REST API ID
+    Default: placeholder-api
+
+  ApiGatewayStageUrl:
+    Type: String
+    Description: API Gateway stage invoke URL
+    Default: https://api.example.com/dev
+
 Resources:
   # VPC Stack
   VPCStack:
@@ -168,6 +223,102 @@ Resources:
         - Key: DeployedBy
           Value: cloudformation
 
+  # IAM Stack
+  IAMStack:
+    Type: AWS::CloudFormation::Stack
+    DependsOn: VPCStack
+    Properties:
+      TemplateURL: !Sub 'https://${TemplatesBucketName}.s3.amazonaws.com/${TemplatesPrefix}iam.yaml'
+      Parameters:
+        Environment: !Ref Environment
+        Region: !Ref Region
+        Client: !Ref Client
+        CostCenter: !Ref CostCenter
+        ConnectInstanceArn: !Sub 'arn:aws:connect:${Region}:${AWS::AccountId}:instance/${ConnectInstanceId}'
+        DatabaseSecretArn: !Sub 'arn:aws:secretsmanager:${Region}:${AWS::AccountId}:secret:${SecretManagerName}'
+      Tags:
+        - Key: StackType
+          Value: IAM
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: Client
+          Value: !Ref Client
+        - Key: DeployedBy
+          Value: cloudformation
+
+  # Kinesis Stack
+  KinesisStack:
+    Type: AWS::CloudFormation::Stack
+    DependsOn: S3Stack
+    Properties:
+      TemplateURL: !Sub 'https://${TemplatesBucketName}.s3.amazonaws.com/${TemplatesPrefix}kinesis.yaml'
+      Parameters:
+        Environment: !Ref Environment
+        Region: !Ref Region
+        Client: !Ref Client
+        CostCenter: !Ref CostCenter
+        ShardCount: 1
+        RetentionPeriod: 24
+        S3StackName: !Ref S3Stack
+      Tags:
+        - Key: StackType
+          Value: Kinesis
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: Client
+          Value: !Ref Client
+        - Key: DeployedBy
+          Value: cloudformation
+
+  # Lambda Stack
+  LambdaStack:
+    Type: AWS::CloudFormation::Stack
+    DependsOn: 
+      - IAMStack
+      - KinesisStack
+    Properties:
+      TemplateURL: !Sub 'https://${TemplatesBucketName}.s3.amazonaws.com/${TemplatesPrefix}lambda.yaml'
+      Parameters:
+        Environment: !Ref Environment
+        Region: !Ref Region
+        Client: !Ref Client
+        CostCenter: !Ref CostCenter
+        LambdaMemorySize: 128
+        LambdaTimeout: 30
+        LambdaRuntime: python3.10
+        VPCStackName: !Ref VPCStack
+        IAMStackName: !Ref IAMStack
+        ConnectInstanceId: !Ref ConnectInstanceId
+        DatabaseEndpoint: !Ref DatabaseEndpoint
+        DatabasePort: !Ref DatabasePort
+        DatabaseName: !Ref DatabaseName
+        SchemaName: !Ref SchemaName
+        SecretManagerName: !Ref SecretManagerName
+        S3BucketVoiceMail: !GetAtt S3Stack.Outputs.VoiceMailBucketName
+        S3BucketExportedReports: !GetAtt S3Stack.Outputs.ExportedReportsBucketName
+        S3BucketRecordings: !GetAtt S3Stack.Outputs.RecordingsAndTranscriptsBucketName
+        S3BucketScreenRecordings: !GetAtt S3Stack.Outputs.ScreenRecordingsBucketName
+        S3BucketCCenter: !GetAtt S3Stack.Outputs.CCenterBucketName
+        DynamoDBTableName: !Ref DynamoDBTableName
+        ContactFlowId: !Ref ContactFlowId
+        ApiGatewayId: !Ref ApiGatewayId
+        ApiGatewayStageUrl: !Ref ApiGatewayStageUrl
+        KinesisStackName: !Ref KinesisStack
+        SMTPFromAddress: gnwcc-dev@genworth.com
+        SMTPHost: smtp.genworth.net
+        SMTPPort: 587
+        SMTPSecretName: SMTP
+        SMTPUsername: smtp-user
+      Tags:
+        - Key: StackType
+          Value: Lambda
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: Client
+          Value: !Ref Client
+        - Key: DeployedBy
+          Value: cloudformation
+
 Outputs:
   VPCStackId:
     Description: VPC Stack ID
@@ -180,6 +331,24 @@ Outputs:
     Value: !Ref S3Stack
     Export:
       Name: !Sub '${AWS::StackName}-S3Stack-ID'
+
+  IAMStackId:
+    Description: IAM Stack ID
+    Value: !Ref IAMStack
+    Export:
+      Name: !Sub '${AWS::StackName}-IAMStack-ID'
+
+  KinesisStackId:
+    Description: Kinesis Stack ID
+    Value: !Ref KinesisStack
+    Export:
+      Name: !Sub '${AWS::StackName}-KinesisStack-ID'
+
+  LambdaStackId:
+    Description: Lambda Stack ID
+    Value: !Ref LambdaStack
+    Export:
+      Name: !Sub '${AWS::StackName}-LambdaStack-ID'
 
   VPCId:
     Description: VPC ID from VPC Stack
