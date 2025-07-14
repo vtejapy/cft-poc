@@ -110,6 +110,9 @@ jobs:
 
       - name: Create S3 bucket for templates
         run: |
+          # Get AWS Account ID
+          AWS_ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
+          
           # Create bucket if it doesn't exist
           if ! aws s3 ls "s3://${{ needs.setup.outputs.templates-bucket }}" 2>/dev/null; then
             aws s3 mb s3://${{ needs.setup.outputs.templates-bucket }} --region ${{ env.AWS_REGION }}
@@ -118,6 +121,35 @@ jobs:
             aws s3api put-bucket-versioning \
               --bucket ${{ needs.setup.outputs.templates-bucket }} \
               --versioning-configuration Status=Enabled
+            
+            # Set bucket policy to allow CloudFormation access
+            aws s3api put-bucket-policy \
+              --bucket ${{ needs.setup.outputs.templates-bucket }} \
+              --policy "{
+                \"Version\": \"2012-10-17\",
+                \"Statement\": [
+                  {
+                    \"Effect\": \"Allow\",
+                    \"Principal\": {
+                      \"Service\": \"cloudformation.amazonaws.com\"
+                    },
+                    \"Action\": \"s3:GetObject\",
+                    \"Resource\": \"arn:aws:s3:::${{ needs.setup.outputs.templates-bucket }}/*\"
+                  },
+                  {
+                    \"Effect\": \"Allow\",
+                    \"Principal\": {
+                      \"AWS\": \"arn:aws:iam::${AWS_ACCOUNT_ID}:root\"
+                    },
+                    \"Action\": [
+                      \"s3:GetObject\",
+                      \"s3:PutObject\",
+                      \"s3:DeleteObject\"
+                    ],
+                    \"Resource\": \"arn:aws:s3:::${{ needs.setup.outputs.templates-bucket }}/*\"
+                  }
+                ]
+              }"
           fi
 
       - name: Upload CloudFormation templates
@@ -125,6 +157,13 @@ jobs:
           echo "📤 Uploading templates to S3..."
           aws s3 sync cloudformation/templates/ s3://${{ needs.setup.outputs.templates-bucket }}/templates/ --delete
           aws s3 cp cloudformation/main.yaml s3://${{ needs.setup.outputs.templates-bucket }}/main.yaml
+          
+          # Make templates publicly readable for CloudFormation
+          aws s3api put-object-acl --bucket ${{ needs.setup.outputs.templates-bucket }} --key main.yaml --acl public-read
+          for template in $(aws s3 ls s3://${{ needs.setup.outputs.templates-bucket }}/templates/ | awk '{print $4}'); do
+            aws s3api put-object-acl --bucket ${{ needs.setup.outputs.templates-bucket }} --key "templates/$template" --acl public-read
+          done
+          
           echo "✅ Templates uploaded successfully!"
 
   change-preview:
