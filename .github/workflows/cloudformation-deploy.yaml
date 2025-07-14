@@ -397,6 +397,20 @@ jobs:
         run: |
           echo "🚀 Deploying CloudFormation stack..."
           
+          # Check if stack exists and its status
+          if aws cloudformation describe-stacks --stack-name ${{ needs.setup.outputs.stack-name }} 2>/dev/null; then
+            STACK_STATUS=$(aws cloudformation describe-stacks --stack-name ${{ needs.setup.outputs.stack-name }} --query 'Stacks[0].StackStatus' --output text)
+            echo "📋 Current stack status: $STACK_STATUS"
+            
+            if [[ "$STACK_STATUS" == "ROLLBACK_COMPLETE" ]]; then
+              echo "⚠️  Stack is in ROLLBACK_COMPLETE state, deleting it first..."
+              aws cloudformation delete-stack --stack-name ${{ needs.setup.outputs.stack-name }}
+              echo "⏳ Waiting for stack deletion to complete..."
+              aws cloudformation wait stack-delete-complete --stack-name ${{ needs.setup.outputs.stack-name }}
+              echo "✅ Stack deleted successfully!"
+            fi
+          fi
+          
           # Convert JSON parameters to parameter-overrides format
           PARAMS=$(cat cloudformation/parameters/${{ needs.setup.outputs.environment }}.json | jq -r '.[] | "\(.ParameterKey)=\(.ParameterValue)"' | paste -sd ' ')
           
@@ -469,7 +483,7 @@ jobs:
 
   cleanup:
     runs-on: ubuntu-latest
-    needs: [setup, upload-templates, deploy, destroy]
+    needs: [setup, upload-templates, deploy, destroy, change-preview]
     if: always() && needs.upload-templates.result == 'success'
     steps:
       - name: Configure AWS credentials
@@ -482,6 +496,17 @@ jobs:
       - name: Clean up templates bucket
         run: |
           echo "🧹 Cleaning up templates bucket..."
-          aws s3 rm s3://${{ needs.setup.outputs.templates-bucket }} --recursive || true
-          aws s3 rb s3://${{ needs.setup.outputs.templates-bucket }} || true
-          echo "✅ Cleanup completed!"
+          echo "📋 Bucket to cleanup: ${{ needs.setup.outputs.templates-bucket }}"
+          
+          # Check if bucket exists before cleanup
+          if aws s3 ls s3://${{ needs.setup.outputs.templates-bucket }} 2>/dev/null; then
+            echo "🗑️  Removing all objects from bucket..."
+            aws s3 rm s3://${{ needs.setup.outputs.templates-bucket }} --recursive || true
+            
+            echo "🗑️  Deleting bucket..."
+            aws s3 rb s3://${{ needs.setup.outputs.templates-bucket }} || true
+            
+            echo "✅ Templates bucket cleanup completed!"
+          else
+            echo "ℹ️  Templates bucket not found or already cleaned up"
+          fi
