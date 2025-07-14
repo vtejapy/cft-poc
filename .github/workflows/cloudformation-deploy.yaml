@@ -2,75 +2,28 @@ name: CloudFormation Deployment
 
 on:
   push:
-    branches: [main, develop]
-    paths:
-      - 'cloudformation/**'
-  pull_request:
-    branches: [main, develop]
+    branches: [main]
     paths:
       - 'cloudformation/**'
   workflow_dispatch:
     inputs:
-      environment:
-        description: 'Environment to deploy to'
-        required: true
-        default: 'dev'
-        type: choice
-        options:
-          - dev
-          - stg
-          - prod
       action:
         description: 'Action to perform'
         required: true
-        default: 'plan'
+        default: 'deploy'
         type: choice
         options:
-          - plan
           - deploy
           - destroy
 
 env:
   AWS_REGION: us-east-1
-  TEMPLATES_BUCKET: cloudformation-templates-${{ github.event.inputs.environment || 'dev' }}-${{ github.run_id }}
-  STACK_NAME: infrastructure-${{ github.event.inputs.environment || 'dev' }}
+  TEMPLATES_BUCKET: cloudformation-templates-prod-${{ github.run_id }}
+  STACK_NAME: infrastructure-prod
 
 jobs:
-  setup:
-    runs-on: ubuntu-latest
-    outputs:
-      environment: ${{ steps.env.outputs.environment }}
-      action: ${{ steps.env.outputs.action }}
-      templates-bucket: ${{ steps.env.outputs.templates-bucket }}
-      stack-name: ${{ steps.env.outputs.stack-name }}
-    steps:
-      - name: Determine environment and action
-        id: env
-        run: |
-          if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
-            ENVIRONMENT=${{ github.event.inputs.environment }}
-            ACTION=${{ github.event.inputs.action }}
-          elif [[ "${{ github.event_name }}" == "push" ]]; then
-            if [[ "${{ github.ref }}" == "refs/heads/main" ]]; then
-              ENVIRONMENT=prod
-              ACTION=deploy
-            else
-              ENVIRONMENT=dev
-              ACTION=deploy
-            fi
-          else
-            ENVIRONMENT=dev
-            ACTION=plan
-          fi
-          
-          echo "environment=$ENVIRONMENT" >> $GITHUB_OUTPUT
-          echo "action=$ACTION" >> $GITHUB_OUTPUT
-          echo "templates-bucket=cloudformation-templates-$ENVIRONMENT-${{ github.run_id }}" >> $GITHUB_OUTPUT
-          echo "stack-name=infrastructure-$ENVIRONMENT" >> $GITHUB_OUTPUT
-
   validate:
     runs-on: ubuntu-latest
-    needs: setup
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -98,8 +51,8 @@ jobs:
 
   upload-templates:
     runs-on: ubuntu-latest
-    needs: [setup, validate]
-    if: needs.setup.outputs.action != 'destroy'
+    needs: validate
+    if: github.event.inputs.action != 'destroy'
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -117,23 +70,23 @@ jobs:
           AWS_ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
           
           # Create bucket if it doesn't exist
-          if ! aws s3 ls "s3://${{ needs.setup.outputs.templates-bucket }}" 2>/dev/null; then
-            aws s3 mb s3://${{ needs.setup.outputs.templates-bucket }} --region ${{ env.AWS_REGION }}
+          if ! aws s3 ls "s3://${{ env.TEMPLATES_BUCKET }}" 2>/dev/null; then
+            aws s3 mb s3://${{ env.TEMPLATES_BUCKET }} --region ${{ env.AWS_REGION }}
             
             # Enable versioning
             aws s3api put-bucket-versioning \
-              --bucket ${{ needs.setup.outputs.templates-bucket }} \
+              --bucket ${{ env.TEMPLATES_BUCKET }} \
               --versioning-configuration Status=Enabled
             
             # Disable block public access to allow CloudFormation access
             aws s3api put-public-access-block \
-              --bucket ${{ needs.setup.outputs.templates-bucket }} \
+              --bucket ${{ env.TEMPLATES_BUCKET }} \
               --public-access-block-configuration \
                 BlockPublicAcls=false,IgnorePublicAcls=false,BlockPublicPolicy=false,RestrictPublicBuckets=false
             
             # Set bucket policy to allow CloudFormation access
             aws s3api put-bucket-policy \
-              --bucket ${{ needs.setup.outputs.templates-bucket }} \
+              --bucket ${{ env.TEMPLATES_BUCKET }} \
               --policy "{
                 \"Version\": \"2012-10-17\",
                 \"Statement\": [
@@ -141,7 +94,7 @@ jobs:
                     \"Effect\": \"Allow\",
                     \"Principal\": \"*\",
                     \"Action\": \"s3:GetObject\",
-                    \"Resource\": \"arn:aws:s3:::${{ needs.setup.outputs.templates-bucket }}/*\"
+                    \"Resource\": \"arn:aws:s3:::${{ env.TEMPLATES_BUCKET }}/*\"
                   },
                   {
                     \"Effect\": \"Allow\",
@@ -155,8 +108,8 @@ jobs:
                       \"s3:ListBucket\"
                     ],
                     \"Resource\": [
-                      \"arn:aws:s3:::${{ needs.setup.outputs.templates-bucket }}\",
-                      \"arn:aws:s3:::${{ needs.setup.outputs.templates-bucket }}/*\"
+                      \"arn:aws:s3:::${{ env.TEMPLATES_BUCKET }}\",
+                      \"arn:aws:s3:::${{ env.TEMPLATES_BUCKET }}/*\"
                     ]
                   }
                 ]
@@ -167,43 +120,22 @@ jobs:
         run: |
           echo "📤 Uploading templates to S3..."
           
-          # List files before upload for debugging
-          echo "🔍 Files to upload:"
-          ls -la cloudformation/
-          ls -la cloudformation/templates/
-          
           # Upload templates
-          aws s3 sync cloudformation/templates/ s3://${{ needs.setup.outputs.templates-bucket }}/templates/ --delete
+          aws s3 sync cloudformation/templates/ s3://${{ env.TEMPLATES_BUCKET }}/templates/ --delete
           
           # Upload main template
-          echo "📤 Uploading main.yaml..."
-          aws s3 cp cloudformation/main.yaml s3://${{ needs.setup.outputs.templates-bucket }}/main.yaml
+          aws s3 cp cloudformation/main.yaml s3://${{ env.TEMPLATES_BUCKET }}/main.yaml
           
           # Wait for S3 consistency
           sleep 3
           
           echo "✅ Templates uploaded successfully!"
-          
-          # Verify template URLs are accessible
-          echo "🔍 Verifying template accessibility..."
-          aws s3 ls s3://${{ needs.setup.outputs.templates-bucket }}/
-          aws s3 ls s3://${{ needs.setup.outputs.templates-bucket }}/templates/
-          
-          # Test main.yaml specifically
-          echo "🔍 Testing main.yaml specifically..."
-          aws s3 ls s3://${{ needs.setup.outputs.templates-bucket }}/main.yaml
-          
-          # Test nested template URLs
-          echo "🔍 Testing nested template URLs..."
-          curl -I "https://${{ needs.setup.outputs.templates-bucket }}.s3.amazonaws.com/templates/vpc.yaml" || echo "VPC template URL failed"
-          curl -I "https://${{ needs.setup.outputs.templates-bucket }}.s3.amazonaws.com/templates/s3.yaml" || echo "S3 template URL failed"
-
 
   deploy:
     runs-on: ubuntu-latest
-    needs: [setup, validate, upload-templates]
-    if: needs.setup.outputs.action == 'deploy'
-    environment: ${{ needs.setup.outputs.environment }}
+    needs: [validate, upload-templates]
+    if: github.event.inputs.action != 'destroy'
+    environment: production
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -220,38 +152,38 @@ jobs:
           echo "🚀 Deploying CloudFormation stack..."
           
           # Check if stack exists and its status
-          if aws cloudformation describe-stacks --stack-name ${{ needs.setup.outputs.stack-name }} 2>/dev/null; then
-            STACK_STATUS=$(aws cloudformation describe-stacks --stack-name ${{ needs.setup.outputs.stack-name }} --query 'Stacks[0].StackStatus' --output text)
+          if aws cloudformation describe-stacks --stack-name ${{ env.STACK_NAME }} 2>/dev/null; then
+            STACK_STATUS=$(aws cloudformation describe-stacks --stack-name ${{ env.STACK_NAME }} --query 'Stacks[0].StackStatus' --output text)
             echo "📋 Current stack status: $STACK_STATUS"
             
             if [[ "$STACK_STATUS" == "ROLLBACK_COMPLETE" ]]; then
               echo "⚠️  Stack is in ROLLBACK_COMPLETE state, deleting it first..."
-              aws cloudformation delete-stack --stack-name ${{ needs.setup.outputs.stack-name }}
+              aws cloudformation delete-stack --stack-name ${{ env.STACK_NAME }}
               echo "⏳ Waiting for stack deletion to complete..."
-              aws cloudformation wait stack-delete-complete --stack-name ${{ needs.setup.outputs.stack-name }}
+              aws cloudformation wait stack-delete-complete --stack-name ${{ env.STACK_NAME }}
               echo "✅ Stack deleted successfully!"
             fi
           fi
           
           # Convert JSON parameters to parameter-overrides format
-          PARAMS=$(cat cloudformation/parameters/${{ needs.setup.outputs.environment }}.json | jq -r '.[] | "\(.ParameterKey)=\(.ParameterValue)"' | paste -sd ' ')
+          PARAMS=$(cat cloudformation/parameters/prod.json | jq -r '.[] | "\(.ParameterKey)=\(.ParameterValue)"' | paste -sd ' ')
           
           echo "📋 Parameters being passed:"
-          echo "$PARAMS TemplatesBucketName=${{ needs.setup.outputs.templates-bucket }}"
+          echo "$PARAMS TemplatesBucketName=${{ env.TEMPLATES_BUCKET }}"
           
           if aws cloudformation deploy \
             --template-file cloudformation/main.yaml \
-            --stack-name ${{ needs.setup.outputs.stack-name }} \
-            --parameter-overrides $PARAMS TemplatesBucketName=${{ needs.setup.outputs.templates-bucket }} \
+            --stack-name ${{ env.STACK_NAME }} \
+            --parameter-overrides $PARAMS TemplatesBucketName=${{ env.TEMPLATES_BUCKET }} \
             --capabilities CAPABILITY_IAM CAPABILITY_NAMED_IAM \
             --no-fail-on-empty-changeset; then
             echo "✅ Stack deployment completed successfully!"
           else
             echo "❌ Stack deployment failed!"
             echo "📋 Getting stack events for debugging..."
-            aws cloudformation describe-stack-events --stack-name ${{ needs.setup.outputs.stack-name }} --max-items 20 --output table || true
+            aws cloudformation describe-stack-events --stack-name ${{ env.STACK_NAME }} --max-items 20 --output table || true
             echo "📋 Getting stack status..."
-            aws cloudformation describe-stacks --stack-name ${{ needs.setup.outputs.stack-name }} --query 'Stacks[0].{Status:StackStatus,Reason:StackStatusReason}' --output table || true
+            aws cloudformation describe-stacks --stack-name ${{ env.STACK_NAME }} --query 'Stacks[0].{Status:StackStatus,Reason:StackStatusReason}' --output table || true
             exit 1
           fi
 
@@ -260,15 +192,15 @@ jobs:
           echo "📄 Stack Outputs:"
           echo "=================="
           aws cloudformation describe-stacks \
-            --stack-name ${{ needs.setup.outputs.stack-name }} \
+            --stack-name ${{ env.STACK_NAME }} \
             --query 'Stacks[0].Outputs' \
             --output table
 
   destroy:
     runs-on: ubuntu-latest
-    needs: [setup, validate]
-    if: needs.setup.outputs.action == 'destroy'
-    environment: ${{ needs.setup.outputs.environment }}
+    needs: validate
+    if: github.event.inputs.action == 'destroy'
+    environment: production
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -283,8 +215,8 @@ jobs:
       - name: Confirm destruction
         run: |
           echo "⚠️  WARNING: You are about to destroy the following stack:"
-          echo "Stack Name: ${{ needs.setup.outputs.stack-name }}"
-          echo "Environment: ${{ needs.setup.outputs.environment }}"
+          echo "Stack Name: ${{ env.STACK_NAME }}"
+          echo "Environment: production"
           echo ""
           echo "This action cannot be undone!"
 
@@ -292,11 +224,11 @@ jobs:
         run: |
           echo "🗑️  Deleting CloudFormation stack..."
           
-          if aws cloudformation describe-stacks --stack-name ${{ needs.setup.outputs.stack-name }} 2>/dev/null; then
-            aws cloudformation delete-stack --stack-name ${{ needs.setup.outputs.stack-name }}
+          if aws cloudformation describe-stacks --stack-name ${{ env.STACK_NAME }} 2>/dev/null; then
+            aws cloudformation delete-stack --stack-name ${{ env.STACK_NAME }}
             
             echo "⏳ Waiting for stack deletion to complete..."
-            aws cloudformation wait stack-delete-complete --stack-name ${{ needs.setup.outputs.stack-name }}
+            aws cloudformation wait stack-delete-complete --stack-name ${{ env.STACK_NAME }}
             
             echo "✅ Stack deleted successfully!"
           else
@@ -305,7 +237,7 @@ jobs:
 
   cleanup:
     runs-on: ubuntu-latest
-    needs: [setup, upload-templates, deploy, destroy]
+    needs: [upload-templates, deploy, destroy]
     if: always() && needs.upload-templates.result == 'success'
     steps:
       - name: Configure AWS credentials
@@ -318,15 +250,15 @@ jobs:
       - name: Clean up templates bucket
         run: |
           echo "🧹 Cleaning up templates bucket..."
-          echo "📋 Bucket to cleanup: ${{ needs.setup.outputs.templates-bucket }}"
+          echo "📋 Bucket to cleanup: ${{ env.TEMPLATES_BUCKET }}"
           
           # Check if bucket exists before cleanup
-          if aws s3 ls s3://${{ needs.setup.outputs.templates-bucket }} 2>/dev/null; then
+          if aws s3 ls s3://${{ env.TEMPLATES_BUCKET }} 2>/dev/null; then
             echo "🗑️  Removing all objects from bucket..."
-            aws s3 rm s3://${{ needs.setup.outputs.templates-bucket }} --recursive || true
+            aws s3 rm s3://${{ env.TEMPLATES_BUCKET }} --recursive || true
             
             echo "🗑️  Deleting bucket..."
-            aws s3 rb s3://${{ needs.setup.outputs.templates-bucket }} || true
+            aws s3 rb s3://${{ env.TEMPLATES_BUCKET }} || true
             
             echo "✅ Templates bucket cleanup completed!"
           else
