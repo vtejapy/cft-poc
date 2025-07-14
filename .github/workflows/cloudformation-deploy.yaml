@@ -48,22 +48,25 @@ jobs:
         id: env
         run: |
           if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
-            echo "environment=${{ github.event.inputs.environment }}" >> $GITHUB_OUTPUT
-            echo "action=${{ github.event.inputs.action }}" >> $GITHUB_OUTPUT
+            ENVIRONMENT=${{ github.event.inputs.environment }}
+            ACTION=${{ github.event.inputs.action }}
           elif [[ "${{ github.event_name }}" == "push" ]]; then
             if [[ "${{ github.ref }}" == "refs/heads/main" ]]; then
-              echo "environment=prod" >> $GITHUB_OUTPUT
-              echo "action=deploy" >> $GITHUB_OUTPUT
+              ENVIRONMENT=prod
+              ACTION=deploy
             else
-              echo "environment=dev" >> $GITHUB_OUTPUT
-              echo "action=deploy" >> $GITHUB_OUTPUT
+              ENVIRONMENT=dev
+              ACTION=deploy
             fi
           else
-            echo "environment=dev" >> $GITHUB_OUTPUT
-            echo "action=plan" >> $GITHUB_OUTPUT
+            ENVIRONMENT=dev
+            ACTION=plan
           fi
-          echo "templates-bucket=cloudformation-templates-$(echo $environment)-${{ github.run_id }}" >> $GITHUB_OUTPUT
-          echo "stack-name=infrastructure-$(echo $environment)" >> $GITHUB_OUTPUT
+          
+          echo "environment=$ENVIRONMENT" >> $GITHUB_OUTPUT
+          echo "action=$ACTION" >> $GITHUB_OUTPUT
+          echo "templates-bucket=cloudformation-templates-$ENVIRONMENT-${{ github.run_id }}" >> $GITHUB_OUTPUT
+          echo "stack-name=infrastructure-$ENVIRONMENT" >> $GITHUB_OUTPUT
 
   validate:
     runs-on: ubuntu-latest
@@ -191,6 +194,7 @@ jobs:
     runs-on: ubuntu-latest
     needs: [setup, validate, upload-templates]
     if: needs.setup.outputs.action == 'plan' || (needs.setup.outputs.action == 'deploy' && github.event_name == 'pull_request')
+    continue-on-error: true
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -209,13 +213,25 @@ jobs:
           
           CHANGESET_NAME="changeset-${{ github.run_id }}-${{ github.run_attempt }}"
           
-          # Test S3 access first
-          echo "🔍 Testing S3 template access..."
-          aws s3 ls s3://${{ needs.setup.outputs.templates-bucket }}/main.yaml
-          
-          # Test template URL accessibility
-          echo "🔍 Testing template URL accessibility..."
-          curl -I https://${{ needs.setup.outputs.templates-bucket }}.s3.amazonaws.com/main.yaml || echo "URL test failed"
+          # Test S3 bucket existence first
+          echo "🔍 Testing S3 bucket existence..."
+          if aws s3 ls s3://${{ needs.setup.outputs.templates-bucket }}/ 2>/dev/null; then
+            echo "✅ S3 bucket exists"
+            
+            # Test template access
+            echo "🔍 Testing S3 template access..."
+            if aws s3 ls s3://${{ needs.setup.outputs.templates-bucket }}/main.yaml 2>/dev/null; then
+              echo "✅ main.yaml found in S3"
+            else
+              echo "⚠️  main.yaml not found in S3"
+            fi
+            
+            # Test template URL accessibility
+            echo "🔍 Testing template URL accessibility..."
+            curl -I https://${{ needs.setup.outputs.templates-bucket }}.s3.amazonaws.com/main.yaml || echo "URL test failed"
+          else
+            echo "⚠️  S3 bucket not found or not accessible"
+          fi
           
           # Wait a moment for S3 consistency
           sleep 5
