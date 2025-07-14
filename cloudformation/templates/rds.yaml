@@ -1,0 +1,269 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: 'RDS PostgreSQL database instance with security group and parameter group'
+
+Parameters:
+  Environment:
+    Type: String
+    Default: dev
+    AllowedValues: [dev, stg, prod]
+    Description: Environment name
+
+  Region:
+    Type: String
+    Default: us-east-1
+    Description: AWS region for deployment
+
+  Client:
+    Type: String
+    Default: gen-client5
+    Description: Client name
+
+  CostCenter:
+    Type: String
+    Default: '1003'
+    Description: Cost center for billing tags
+
+  VPCStackName:
+    Type: String
+    Description: Name of the VPC stack
+
+  RDSEngineVersion:
+    Type: String
+    Default: '16.4'
+    Description: PostgreSQL engine version
+
+  RDSInstanceClass:
+    Type: String
+    Default: db.t3.micro
+    Description: RDS instance class
+
+  RDSStorageType:
+    Type: String
+    Default: gp3
+    AllowedValues: [gp2, gp3, io1, io2]
+    Description: RDS storage type
+
+  RDSAllocatedStorage:
+    Type: Number
+    Default: 20
+    MinValue: 20
+    MaxValue: 1000
+    Description: RDS allocated storage in GB
+
+  RDSMaintenanceWindow:
+    Type: String
+    Default: 'sun:05:00-sun:06:00'
+    Description: RDS maintenance window
+
+  RDSBackupRetentionPeriod:
+    Type: Number
+    Default: 7
+    MinValue: 0
+    MaxValue: 35
+    Description: RDS backup retention period in days
+
+  DBName:
+    Type: String
+    Default: postgres
+    Description: Database name
+
+  RDSUsername:
+    Type: String
+    Default: postgres
+    Description: RDS master username
+
+  RDSParameterGroupName:
+    Type: String
+    Default: postgres-parameter-group
+    Description: RDS parameter group name
+
+Resources:
+  # ====================
+  # SECURITY GROUP
+  # ====================
+  RDSSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupName: !Sub 'postgres-rds-sg-${Client}-${Region}-${Environment}'
+      GroupDescription: Allow TLS inbound traffic from Lambda security group
+      VpcId:
+        Fn::ImportValue: !Sub '${VPCStackName}-VPC-ID'
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 5432
+          ToPort: 5432
+          CidrIp:
+            Fn::ImportValue: !Sub '${VPCStackName}-VPC-CIDR'
+          Description: Allow ingress from Lambda security group to RDS security group
+      SecurityGroupEgress:
+        - IpProtocol: -1
+          CidrIp: 0.0.0.0/0
+          Description: Allow all outbound traffic
+      Tags:
+        - Key: Name
+          Value: !Sub 'postgres-rds-sg-${Client}-${Region}-${Environment}'
+        - Key: environment
+          Value: !Ref Environment
+        - Key: costCenter
+          Value: !Ref CostCenter
+        - Key: appService
+          Value: !Ref Client
+        - Key: deployedBy
+          Value: cloudformation
+
+  # ====================
+  # DB SUBNET GROUP
+  # ====================
+  DBSubnetGroup:
+    Type: AWS::RDS::DBSubnetGroup
+    Properties:
+      DBSubnetGroupName: !Sub 'postgres-db-subnet-group-${Client}-${Region}-${Environment}'
+      DBSubnetGroupDescription: Subnet group for PostgreSQL RDS instance
+      SubnetIds:
+        - Fn::ImportValue: !Sub '${VPCStackName}-PrivateSubnet1-ID'
+        - Fn::ImportValue: !Sub '${VPCStackName}-PrivateSubnet2-ID'
+        - Fn::ImportValue: !Sub '${VPCStackName}-PrivateSubnet3-ID'
+        - Fn::ImportValue: !Sub '${VPCStackName}-PublicSubnet1-ID'
+        - Fn::ImportValue: !Sub '${VPCStackName}-PublicSubnet2-ID'
+      Tags:
+        - Key: Name
+          Value: !Sub 'postgres-db-subnet-group-${Client}-${Region}-${Environment}'
+        - Key: environment
+          Value: !Ref Environment
+        - Key: costCenter
+          Value: !Ref CostCenter
+        - Key: appService
+          Value: !Ref Client
+        - Key: deployedBy
+          Value: cloudformation
+
+  # ====================
+  # DB PARAMETER GROUP
+  # ====================
+  DBParameterGroup:
+    Type: AWS::RDS::DBParameterGroup
+    Properties:
+      DBParameterGroupName: !Sub '${Client}-${RDSParameterGroupName}-${Region}-${Environment}'
+      Family: postgres16
+      Description: postgres rds parameter group
+      Parameters:
+        application_name: !Sub 'postgres-rds-${Client}-${Region}-${Environment}'
+      Tags:
+        - Key: Name
+          Value: !Sub '${Client}-${RDSParameterGroupName}-${Region}-${Environment}'
+        - Key: environment
+          Value: !Ref Environment
+        - Key: costCenter
+          Value: !Ref CostCenter
+        - Key: appService
+          Value: !Ref Client
+        - Key: deployedBy
+          Value: cloudformation
+
+  # ====================
+  # RDS INSTANCE
+  # ====================
+  PostgreSQLDatabase:
+    Type: AWS::RDS::DBInstance
+    Properties:
+      DBInstanceIdentifier: !Sub 'postgres-rds-${Client}-${Region}-${Environment}'
+      Engine: postgres
+      EngineVersion: !Ref RDSEngineVersion
+      DBInstanceClass: !Ref RDSInstanceClass
+      StorageType: !Ref RDSStorageType
+      AllocatedStorage: !Ref RDSAllocatedStorage
+      DBSubnetGroupName: !Ref DBSubnetGroup
+      PubliclyAccessible: false
+      MultiAZ: !If [IsProdEnvironment, true, false]
+      DeletionProtection: false
+      AutoMinorVersionUpgrade: true
+      PerformanceInsightsEnabled: true
+      CopyTagsToSnapshot: true
+      DBName: !Ref DBName
+      MasterUsername: !Ref RDSUsername
+      ManageMasterUserPassword: true
+      BackupRetentionPeriod: !Ref RDSBackupRetentionPeriod
+      PreferredBackupWindow: '07:00-09:00'
+      PreferredMaintenanceWindow: !Ref RDSMaintenanceWindow
+      FinalDBSnapshotIdentifier: !Sub 'final-snapshot-${Client}-${Region}-${Environment}'
+      SkipFinalSnapshot: false
+      VPCSecurityGroups:
+        - !Ref RDSSecurityGroup
+      DBParameterGroupName: !Ref DBParameterGroup
+      KmsKeyId: !Sub 'alias/aws/rds'
+      StorageEncrypted: true
+      PerformanceInsightsKMSKeyId: !Sub 'alias/aws/rds'
+      EnableIAMDatabaseAuthentication: true
+      Tags:
+        - Key: Name
+          Value: !Sub 'postgres-rds-${Client}-${Region}-${Environment}'
+        - Key: environment
+          Value: !Ref Environment
+        - Key: costCenter
+          Value: !Ref CostCenter
+        - Key: appService
+          Value: !Ref Client
+        - Key: deployedBy
+          Value: cloudformation
+        - Key: MaintenanceWindow
+          Value: !Ref RDSMaintenanceWindow
+
+  # ====================
+  # DB SNAPSHOT (Manual)
+  # ====================
+  PostgreSQLSnapshot:
+    Type: AWS::RDS::DBSnapshot
+    Properties:
+      DBSnapshotIdentifier: !Sub 'postgres-rds-snapshot-${Client}-${Region}-${Environment}'
+      DBInstanceIdentifier: !Ref PostgreSQLDatabase
+      Tags:
+        - Key: Name
+          Value: !Sub 'postgres-rds-snapshot-${Client}-${Region}-${Environment}'
+        - Key: environment
+          Value: !Ref Environment
+        - Key: costCenter
+          Value: !Ref CostCenter
+        - Key: appService
+          Value: !Ref Client
+        - Key: deployedBy
+          Value: cloudformation
+
+Conditions:
+  IsProdEnvironment: !Equals [!Ref Environment, prod]
+
+Outputs:
+  RDSInstanceId:
+    Description: RDS Instance ID
+    Value: !Ref PostgreSQLDatabase
+    Export:
+      Name: !Sub '${AWS::StackName}-RDSInstance'
+
+  RDSEndpoint:
+    Description: RDS Instance Endpoint
+    Value: !GetAtt PostgreSQLDatabase.Endpoint.Address
+    Export:
+      Name: !Sub '${AWS::StackName}-RDSEndpoint'
+
+  RDSPort:
+    Description: RDS Instance Port
+    Value: !GetAtt PostgreSQLDatabase.Endpoint.Port
+    Export:
+      Name: !Sub '${AWS::StackName}-RDSPort'
+
+  RDSSecretArn:
+    Description: RDS Master User Secret ARN
+    Value: !GetAtt PostgreSQLDatabase.MasterUserSecret.SecretArn
+    Export:
+      Name: !Sub '${AWS::StackName}-RDSSecretArn'
+
+  RDSSecurityGroupId:
+    Description: RDS Security Group ID
+    Value: !Ref RDSSecurityGroup
+    Export:
+      Name: !Sub '${AWS::StackName}-RDSSecurityGroup'
+
+  RDSSnapshotId:
+    Description: RDS Snapshot ID
+    Value: !Ref PostgreSQLSnapshot
+    Export:
+      Name: !Sub '${AWS::StackName}-RDSSnapshot'

@@ -169,6 +169,9 @@ Parameters:
     Description: API Gateway stage invoke URL
     Default: https://api.example.com/dev
 
+Conditions:
+  IsProdEnvironment: !Equals [!Ref Environment, prod]
+
 Resources:
   # VPC Stack
   VPCStack:
@@ -389,6 +392,61 @@ Resources:
         - Key: DeployedBy
           Value: cloudformation
 
+  # RDS Stack
+  RDSStack:
+    Type: AWS::CloudFormation::Stack
+    DependsOn: VPCStack
+    Properties:
+      TemplateURL: !Sub 'https://${TemplatesBucketName}.s3.amazonaws.com/${TemplatesPrefix}rds.yaml'
+      Parameters:
+        Environment: !Ref Environment
+        Region: !Ref Region
+        Client: !Ref Client
+        CostCenter: !Ref CostCenter
+        VPCStackName: !Ref VPCStack
+        RDSEngineVersion: '16.4'
+        RDSInstanceClass: !If [IsProdEnvironment, 'db.t3.medium', 'db.t3.micro']
+        RDSStorageType: gp3
+        RDSAllocatedStorage: !If [IsProdEnvironment, 100, 20]
+        RDSMaintenanceWindow: 'sun:05:00-sun:06:00'
+        RDSBackupRetentionPeriod: !If [IsProdEnvironment, 14, 7]
+        DBName: !Ref DatabaseName
+        RDSUsername: postgres
+        RDSParameterGroupName: postgres-parameter-group
+      Tags:
+        - Key: StackType
+          Value: RDS
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: Client
+          Value: !Ref Client
+        - Key: DeployedBy
+          Value: cloudformation
+
+  # Connect Stack
+  ConnectStack:
+    Type: AWS::CloudFormation::Stack
+    DependsOn: S3Stack
+    Properties:
+      TemplateURL: !Sub 'https://${TemplatesBucketName}.s3.amazonaws.com/${TemplatesPrefix}connect.yaml'
+      Parameters:
+        Environment: !Ref Environment
+        Region: !Ref Region
+        Client: !Ref Client
+        CostCenter: !Ref CostCenter
+        ConnectInstanceAlias: genpact-poc
+        ConnectIdentityManagementType: CONNECT_MANAGED
+        S3StackName: !Ref S3Stack
+      Tags:
+        - Key: StackType
+          Value: Connect
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: Client
+          Value: !Ref Client
+        - Key: DeployedBy
+          Value: cloudformation
+
   # EventBridge Stack
   EventBridgeStack:
     Type: AWS::CloudFormation::Stack
@@ -465,6 +523,18 @@ Outputs:
     Value: !Ref EventBridgeStack
     Export:
       Name: !Sub '${AWS::StackName}-EventBridgeStack-ID'
+
+  RDSStackId:
+    Description: RDS Stack ID
+    Value: !Ref RDSStack
+    Export:
+      Name: !Sub '${AWS::StackName}-RDSStack-ID'
+
+  ConnectStackId:
+    Description: Connect Stack ID
+    Value: !Ref ConnectStack
+    Export:
+      Name: !Sub '${AWS::StackName}-ConnectStack-ID'
 
   VPCId:
     Description: VPC ID from VPC Stack

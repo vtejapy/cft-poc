@@ -1,0 +1,408 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: 'Amazon Connect instance with contact flows, queues, and user management'
+
+Parameters:
+  Environment:
+    Type: String
+    Default: dev
+    AllowedValues: [dev, stg, prod]
+    Description: Environment name
+
+  Region:
+    Type: String
+    Default: us-east-1
+    Description: AWS region for deployment
+
+  Client:
+    Type: String
+    Default: gen-client5
+    Description: Client name
+
+  CostCenter:
+    Type: String
+    Default: '1003'
+    Description: Cost center for billing tags
+
+  ConnectInstanceAlias:
+    Type: String
+    Default: genpact-poc
+    Description: Amazon Connect instance alias
+
+  ConnectIdentityManagementType:
+    Type: String
+    Default: CONNECT_MANAGED
+    AllowedValues: [CONNECT_MANAGED, SAML, EXISTING_DIRECTORY]
+    Description: Identity management type for Connect
+
+  S3StackName:
+    Type: String
+    Description: Name of the S3 stack for Connect data storage
+
+Resources:
+  # ====================
+  # AMAZON CONNECT INSTANCE
+  # ====================
+  ConnectInstance:
+    Type: AWS::Connect::Instance
+    Properties:
+      InstanceAlias: !Sub '${ConnectInstanceAlias}-${Environment}'
+      IdentityManagementType: !Ref ConnectIdentityManagementType
+      Attributes:
+        InboundCalls: true
+        OutboundCalls: true
+        ContactflowLogs: true
+        ContactLens: true
+        AutoResolveBestVoices: true
+        UseCustomTTSVoices: false
+        EarlyMedia: true
+      Tags:
+        - Key: Name
+          Value: !Sub '${ConnectInstanceAlias}-${Environment}'
+        - Key: environment
+          Value: !Ref Environment
+        - Key: costCenter
+          Value: !Ref CostCenter
+        - Key: appService
+          Value: !Ref Client
+        - Key: deployedBy
+          Value: cloudformation
+
+  # ====================
+  # STORAGE CONFIG
+  # ====================
+  ConnectInstanceStorageConfig:
+    Type: AWS::Connect::InstanceStorageConfig
+    Properties:
+      InstanceArn: !GetAtt ConnectInstance.Arn
+      ResourceType: CONTACT_TRACE_RECORDS
+      StorageType: S3
+      S3Config:
+        BucketName:
+          Fn::ImportValue: !Sub '${S3StackName}-RecordingsAndTranscriptsBucket'
+        BucketPrefix: contact-trace-records/
+
+  # ====================
+  # HOURS OF OPERATION
+  # ====================
+  DefaultHoursOfOperation:
+    Type: AWS::Connect::HoursOfOperation
+    Properties:
+      InstanceArn: !GetAtt ConnectInstance.Arn
+      Name: !Sub 'Default-Hours-${Environment}'
+      Description: Default hours of operation for the contact center
+      TimeZone: America/New_York
+      Config:
+        - Day: MONDAY
+          StartTime:
+            Hours: 8
+            Minutes: 0
+          EndTime:
+            Hours: 18
+            Minutes: 0
+        - Day: TUESDAY
+          StartTime:
+            Hours: 8
+            Minutes: 0
+          EndTime:
+            Hours: 18
+            Minutes: 0
+        - Day: WEDNESDAY
+          StartTime:
+            Hours: 8
+            Minutes: 0
+          EndTime:
+            Hours: 18
+            Minutes: 0
+        - Day: THURSDAY
+          StartTime:
+            Hours: 8
+            Minutes: 0
+          EndTime:
+            Hours: 18
+            Minutes: 0
+        - Day: FRIDAY
+          StartTime:
+            Hours: 8
+            Minutes: 0
+          EndTime:
+            Hours: 18
+            Minutes: 0
+      Tags:
+        - Key: Name
+          Value: !Sub 'Default-Hours-${Environment}'
+        - Key: environment
+          Value: !Ref Environment
+        - Key: costCenter
+          Value: !Ref CostCenter
+        - Key: appService
+          Value: !Ref Client
+        - Key: deployedBy
+          Value: cloudformation
+
+  # ====================
+  # ROUTING PROFILE
+  # ====================
+  DefaultRoutingProfile:
+    Type: AWS::Connect::RoutingProfile
+    Properties:
+      InstanceArn: !GetAtt ConnectInstance.Arn
+      Name: !Sub 'Default-Routing-Profile-${Environment}'
+      Description: Default routing profile for agents
+      DefaultOutboundQueueArn: !GetAtt DefaultQueue.QueueArn
+      MediaConcurrencies:
+        - Channel: VOICE
+          Concurrency: 1
+          CrossChannelBehavior:
+            BehaviorType: ROUTE_CURRENT_CHANNEL_ONLY
+        - Channel: CHAT
+          Concurrency: 3
+          CrossChannelBehavior:
+            BehaviorType: ROUTE_CURRENT_CHANNEL_ONLY
+      QueueConfigs:
+        - QueueReference:
+            Channel: VOICE
+            QueueArn: !GetAtt DefaultQueue.QueueArn
+          Priority: 1
+          Delay: 0
+      Tags:
+        - Key: Name
+          Value: !Sub 'Default-Routing-Profile-${Environment}'
+        - Key: environment
+          Value: !Ref Environment
+        - Key: costCenter
+          Value: !Ref CostCenter
+        - Key: appService
+          Value: !Ref Client
+        - Key: deployedBy
+          Value: cloudformation
+
+  # ====================
+  # QUEUE
+  # ====================
+  DefaultQueue:
+    Type: AWS::Connect::Queue
+    Properties:
+      InstanceArn: !GetAtt ConnectInstance.Arn
+      Name: !Sub 'Default-Queue-${Environment}'
+      Description: Default queue for incoming contacts
+      HoursOfOperationArn: !GetAtt DefaultHoursOfOperation.HoursOfOperationArn
+      MaxContacts: 100
+      OutboundCallerConfig:
+        OutboundCallerIdName: !Sub '${Client} Customer Service'
+      Status: ENABLED
+      Tags:
+        - Key: Name
+          Value: !Sub 'Default-Queue-${Environment}'
+        - Key: environment
+          Value: !Ref Environment
+        - Key: costCenter
+          Value: !Ref CostCenter
+        - Key: appService
+          Value: !Ref Client
+        - Key: deployedBy
+          Value: cloudformation
+
+  # ====================
+  # CONTACT FLOW (Basic)
+  # ====================
+  DefaultContactFlow:
+    Type: AWS::Connect::ContactFlow
+    Properties:
+      InstanceArn: !GetAtt ConnectInstance.Arn
+      Name: !Sub 'Default-Contact-Flow-${Environment}'
+      Description: Default contact flow for incoming calls
+      Type: CONTACT_FLOW
+      Content: !Sub |
+        {
+          "Version": "2019-10-30",
+          "StartAction": "12345678-1234-1234-1234-123456789012",
+          "Actions": [
+            {
+              "Identifier": "12345678-1234-1234-1234-123456789012",
+              "Type": "MessageParticipant",
+              "Transitions": {
+                "NextAction": "23456789-1234-1234-1234-123456789012",
+                "Errors": [],
+                "Conditions": []
+              },
+              "Parameters": {
+                "Text": "Thank you for calling ${Client}. Please hold while we connect you to an agent."
+              }
+            },
+            {
+              "Identifier": "23456789-1234-1234-1234-123456789012",
+              "Type": "TransferToQueue",
+              "Transitions": {
+                "NextAction": "34567890-1234-1234-1234-123456789012",
+                "Errors": [
+                  {
+                    "NextAction": "34567890-1234-1234-1234-123456789012",
+                    "ErrorType": "QueueAtCapacity"
+                  },
+                  {
+                    "NextAction": "34567890-1234-1234-1234-123456789012",
+                    "ErrorType": "NoMatchingError"
+                  }
+                ],
+                "Conditions": []
+              },
+              "Parameters": {
+                "QueueId": "${DefaultQueue}"
+              }
+            },
+            {
+              "Identifier": "34567890-1234-1234-1234-123456789012",
+              "Type": "Disconnect",
+              "Transitions": {},
+              "Parameters": {}
+            }
+          ]
+        }
+      Tags:
+        - Key: Name
+          Value: !Sub 'Default-Contact-Flow-${Environment}'
+        - Key: environment
+          Value: !Ref Environment
+        - Key: costCenter
+          Value: !Ref CostCenter
+        - Key: appService
+          Value: !Ref Client
+        - Key: deployedBy
+          Value: cloudformation
+
+  # ====================
+  # SECURITY PROFILE
+  # ====================
+  AgentSecurityProfile:
+    Type: AWS::Connect::SecurityProfile
+    Properties:
+      InstanceArn: !GetAtt ConnectInstance.Arn
+      SecurityProfileName: !Sub 'Agent-Security-Profile-${Environment}'
+      Description: Security profile for agents
+      Permissions:
+        - AccessControlTags.View
+        - Analytics.Access
+        - Contact.View
+        - ContactSearch.View
+        - HistoricalMetrics.Access
+        - RealTimeMetrics.Access
+      Tags:
+        - Key: Name
+          Value: !Sub 'Agent-Security-Profile-${Environment}'
+        - Key: environment
+          Value: !Ref Environment
+        - Key: costCenter
+          Value: !Ref CostCenter
+        - Key: appService
+          Value: !Ref Client
+        - Key: deployedBy
+          Value: cloudformation
+
+  # ====================
+  # USER HIERARCHY GROUP
+  # ====================
+  DefaultUserHierarchyGroup:
+    Type: AWS::Connect::UserHierarchyGroup
+    Properties:
+      InstanceArn: !GetAtt ConnectInstance.Arn
+      Name: !Sub 'Default-Group-${Environment}'
+      Tags:
+        - Key: Name
+          Value: !Sub 'Default-Group-${Environment}'
+        - Key: environment
+          Value: !Ref Environment
+        - Key: costCenter
+          Value: !Ref CostCenter
+        - Key: appService
+          Value: !Ref Client
+        - Key: deployedBy
+          Value: cloudformation
+
+  # ====================
+  # PHONE NUMBER (if needed)
+  # ====================
+  # ConnectPhoneNumber:
+  #   Type: AWS::Connect::PhoneNumber
+  #   Properties:
+  #     TargetArn: !GetAtt ConnectInstance.Arn
+  #     Type: DID
+  #     CountryCode: US
+  #     Description: !Sub 'Main phone number for ${Environment}'
+  #     Tags:
+  #       - Key: Name
+  #         Value: !Sub 'Main-Phone-${Environment}'
+  #       - Key: environment
+  #         Value: !Ref Environment
+  #       - Key: costCenter
+  #         Value: !Ref CostCenter
+  #       - Key: appService
+  #         Value: !Ref Client
+  #       - Key: deployedBy
+  #         Value: cloudformation
+
+Outputs:
+  ConnectInstanceId:
+    Description: Amazon Connect Instance ID
+    Value: !Ref ConnectInstance
+    Export:
+      Name: !Sub '${AWS::StackName}-ConnectInstance'
+
+  ConnectInstanceArn:
+    Description: Amazon Connect Instance ARN
+    Value: !GetAtt ConnectInstance.Arn
+    Export:
+      Name: !Sub '${AWS::StackName}-ConnectInstanceArn'
+
+  ConnectServiceRole:
+    Description: Amazon Connect Service Role ARN
+    Value: !GetAtt ConnectInstance.ServiceRole
+    Export:
+      Name: !Sub '${AWS::StackName}-ConnectServiceRole'
+
+  DefaultQueueId:
+    Description: Default Queue ID
+    Value: !Ref DefaultQueue
+    Export:
+      Name: !Sub '${AWS::StackName}-DefaultQueue'
+
+  DefaultQueueArn:
+    Description: Default Queue ARN
+    Value: !GetAtt DefaultQueue.QueueArn
+    Export:
+      Name: !Sub '${AWS::StackName}-DefaultQueueArn'
+
+  DefaultContactFlowId:
+    Description: Default Contact Flow ID
+    Value: !Ref DefaultContactFlow
+    Export:
+      Name: !Sub '${AWS::StackName}-DefaultContactFlow'
+
+  DefaultContactFlowArn:
+    Description: Default Contact Flow ARN
+    Value: !GetAtt DefaultContactFlow.ContactFlowArn
+    Export:
+      Name: !Sub '${AWS::StackName}-DefaultContactFlowArn'
+
+  DefaultRoutingProfileId:
+    Description: Default Routing Profile ID
+    Value: !Ref DefaultRoutingProfile
+    Export:
+      Name: !Sub '${AWS::StackName}-DefaultRoutingProfile'
+
+  DefaultRoutingProfileArn:
+    Description: Default Routing Profile ARN
+    Value: !GetAtt DefaultRoutingProfile.RoutingProfileArn
+    Export:
+      Name: !Sub '${AWS::StackName}-DefaultRoutingProfileArn'
+
+  AgentSecurityProfileId:
+    Description: Agent Security Profile ID
+    Value: !Ref AgentSecurityProfile
+    Export:
+      Name: !Sub '${AWS::StackName}-AgentSecurityProfile'
+
+  DefaultHoursOfOperationId:
+    Description: Default Hours of Operation ID
+    Value: !Ref DefaultHoursOfOperation
+    Export:
+      Name: !Sub '${AWS::StackName}-DefaultHoursOfOperation'

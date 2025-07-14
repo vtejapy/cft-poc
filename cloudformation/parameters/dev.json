@@ -31,7 +31,17 @@
     "ApiGatewayId": "your-api-gateway-id",
     "ApiGatewayStageUrl": "https://your-api-gateway.execute-api.us-east-1.amazonaws.com/dev",
     "TemplatesBucketName": "cloudformation-templates-bucket",
-    "TemplatesPrefix": "templates/"
+    "TemplatesPrefix": "templates/",
+    "RDSEngineVersion": "16.4",
+    "RDSInstanceClass": "db.t3.micro",
+    "RDSStorageType": "gp3",
+    "RDSAllocatedStorage": "20",
+    "RDSMaintenanceWindow": "sun:05:00-sun:06:00",
+    "RDSBackupRetentionPeriod": "7",
+    "RDSUsername": "postgres",
+    "RDSParameterGroupName": "postgres-parameter-group",
+    "ConnectInstanceAlias": "genpact-poc",
+    "ConnectIdentityManagementType": "CONNECT_MANAGED"
   },
   "Tags": {
     "environment": "dev",
