@@ -48,19 +48,19 @@ Resources:
         - Key: deployedBy
           Value: cloudformation
 
-  # Internet Gateway
-  InternetGateway:
-    Type: AWS::EC2::InternetGateway
-    Properties:
-      Tags:
-        - Key: Name
-          Value: !Sub '${Client}-vpc-${Region}-${Environment}-igw'
+  # # Internet Gateway
+  # InternetGateway:
+  #   Type: AWS::EC2::InternetGateway
+  #   Properties:
+  #     Tags:
+  #       - Key: Name
+  #         Value: !Sub '${Client}-vpc-${Region}-${Environment}-igw'
 
-  AttachGateway:
-    Type: AWS::EC2::VPCGatewayAttachment
-    Properties:
-      VpcId: !Ref VPC
-      InternetGatewayId: !Ref InternetGateway
+  # AttachGateway:
+  #   Type: AWS::EC2::VPCGatewayAttachment
+  #   Properties:
+  #     VpcId: !Ref VPC
+  #     InternetGatewayId: !Ref InternetGateway
 
   # Private Subnets
   PrivateSubnet1:
@@ -155,95 +155,95 @@ Resources:
           Value: cloudformation
 
   # NAT Gateway
-  NATGatewayEIP:
-    Type: AWS::EC2::EIP
-    DependsOn: AttachGateway
-    Properties:
-      Domain: vpc
+  # NATGatewayEIP:
+  #   Type: AWS::EC2::EIP
+  #   DependsOn: AttachGateway
+  #   Properties:
+  #     Domain: vpc
 
-  NATGateway:
-    Type: AWS::EC2::NatGateway
-    Properties:
-      AllocationId: !GetAtt NATGatewayEIP.AllocationId
-      SubnetId: !Ref PublicSubnet1
-      Tags:
-        - Key: Name
-          Value: !Sub '${Client}-vpc-${Region}-${Environment}-nat'
+  # NATGateway:
+  #   Type: AWS::EC2::NatGateway
+  #   Properties:
+  #     AllocationId: !GetAtt NATGatewayEIP.AllocationId
+  #     SubnetId: !Ref PublicSubnet1
+  #     Tags:
+  #       - Key: Name
+  #         Value: !Sub '${Client}-vpc-${Region}-${Environment}-nat'
 
-  # Route Tables
-  PrivateRouteTable:
-    Type: AWS::EC2::RouteTable
-    Properties:
-      VpcId: !Ref VPC
-      Tags:
-        - Key: Name
-          Value: !Sub '${Client}-vpc-${Region}-${Environment}-private-rt'
+  # # Route Tables
+  # PrivateRouteTable:
+  #   Type: AWS::EC2::RouteTable
+  #   Properties:
+  #     VpcId: !Ref VPC
+  #     Tags:
+  #       - Key: Name
+  #         Value: !Sub '${Client}-vpc-${Region}-${Environment}-private-rt'
 
-  PublicRouteTable:
-    Type: AWS::EC2::RouteTable
-    Properties:
-      VpcId: !Ref VPC
-      Tags:
-        - Key: Name
-          Value: !Sub '${Client}-vpc-${Region}-${Environment}-public-rt'
+  # PublicRouteTable:
+  #   Type: AWS::EC2::RouteTable
+  #   Properties:
+  #     VpcId: !Ref VPC
+  #     Tags:
+  #       - Key: Name
+  #         Value: !Sub '${Client}-vpc-${Region}-${Environment}-public-rt'
 
-  # Routes
-  PrivateRoute:
-    Type: AWS::EC2::Route
-    Properties:
-      RouteTableId: !Ref PrivateRouteTable
-      DestinationCidrBlock: 0.0.0.0/0
-      NatGatewayId: !Ref NATGateway
+  # # Routes
+  # PrivateRoute:
+  #   Type: AWS::EC2::Route
+  #   Properties:
+  #     RouteTableId: !Ref PrivateRouteTable
+  #     DestinationCidrBlock: 0.0.0.0/0
+  #     NatGatewayId: !Ref NATGateway
 
-  PublicRoute:
-    Type: AWS::EC2::Route
-    DependsOn: AttachGateway
-    Properties:
-      RouteTableId: !Ref PublicRouteTable
-      DestinationCidrBlock: 0.0.0.0/0
-      GatewayId: !Ref InternetGateway
+  # PublicRoute:
+  #   Type: AWS::EC2::Route
+  #   DependsOn: AttachGateway
+  #   Properties:
+  #     RouteTableId: !Ref PublicRouteTable
+  #     DestinationCidrBlock: 0.0.0.0/0
+  #     GatewayId: !Ref InternetGateway
 
-  # Route Table Associations
-  PrivateSubnetRouteTableAssociation1:
-    Type: AWS::EC2::SubnetRouteTableAssociation
-    Properties:
-      SubnetId: !Ref PrivateSubnet1
-      RouteTableId: !Ref PrivateRouteTable
+  # # Route Table Associations
+  # PrivateSubnetRouteTableAssociation1:
+  #   Type: AWS::EC2::SubnetRouteTableAssociation
+  #   Properties:
+  #     SubnetId: !Ref PrivateSubnet1
+  #     RouteTableId: !Ref PrivateRouteTable
 
-  PrivateSubnetRouteTableAssociation2:
-    Type: AWS::EC2::SubnetRouteTableAssociation
-    Properties:
-      SubnetId: !Ref PrivateSubnet2
-      RouteTableId: !Ref PrivateRouteTable
+  # PrivateSubnetRouteTableAssociation2:
+  #   Type: AWS::EC2::SubnetRouteTableAssociation
+  #   Properties:
+  #     SubnetId: !Ref PrivateSubnet2
+  #     RouteTableId: !Ref PrivateRouteTable
 
-  PrivateSubnetRouteTableAssociation3:
-    Type: AWS::EC2::SubnetRouteTableAssociation
-    Properties:
-      SubnetId: !Ref PrivateSubnet3
-      RouteTableId: !Ref PrivateRouteTable
+  # PrivateSubnetRouteTableAssociation3:
+  #   Type: AWS::EC2::SubnetRouteTableAssociation
+  #   Properties:
+  #     SubnetId: !Ref PrivateSubnet3
+  #     RouteTableId: !Ref PrivateRouteTable
 
-  PublicSubnetRouteTableAssociation1:
-    Type: AWS::EC2::SubnetRouteTableAssociation
-    Properties:
-      SubnetId: !Ref PublicSubnet1
-      RouteTableId: !Ref PublicRouteTable
+  # PublicSubnetRouteTableAssociation1:
+  #   Type: AWS::EC2::SubnetRouteTableAssociation
+  #   Properties:
+  #     SubnetId: !Ref PublicSubnet1
+  #     RouteTableId: !Ref PublicRouteTable
 
-  PublicSubnetRouteTableAssociation2:
-    Type: AWS::EC2::SubnetRouteTableAssociation
-    Properties:
-      SubnetId: !Ref PublicSubnet2
-      RouteTableId: !Ref PublicRouteTable
+  # PublicSubnetRouteTableAssociation2:
+  #   Type: AWS::EC2::SubnetRouteTableAssociation
+  #   Properties:
+  #     SubnetId: !Ref PublicSubnet2
+  #     RouteTableId: !Ref PublicRouteTable
 
-  # VPC Endpoint for S3
-  S3VPCEndpoint:
-    Type: AWS::EC2::VPCEndpoint
-    Properties:
-      VpcId: !Ref VPC
-      ServiceName: !Sub 'com.amazonaws.${AWS::Region}.s3'
-      VpcEndpointType: Gateway
-      RouteTableIds:
-        - !Ref PrivateRouteTable
-        - !Ref PublicRouteTable
+  # # VPC Endpoint for S3
+  # S3VPCEndpoint:
+  #   Type: AWS::EC2::VPCEndpoint
+  #   Properties:
+  #     VpcId: !Ref VPC
+  #     ServiceName: !Sub 'com.amazonaws.${AWS::Region}.s3'
+  #     VpcEndpointType: Gateway
+  #     RouteTableIds:
+  #       - !Ref PrivateRouteTable
+  #       - !Ref PublicRouteTable
 
   # ====================
   # ADDITIONAL VPC RESOURCES (COMMENTED OUT)
@@ -386,8 +386,8 @@ Outputs:
     Export:
       Name: !Sub '${AWS::StackName}-PublicSubnet2-ID'
 
-  S3VPCEndpointId:
-    Description: S3 VPC Endpoint ID
-    Value: !Ref S3VPCEndpoint
-    Export:
-      Name: !Sub '${AWS::StackName}-S3VPCEndpoint-ID'
+  # S3VPCEndpointId:
+  #   Description: S3 VPC Endpoint ID
+  #   Value: !Ref S3VPCEndpoint
+  #   Export:
+  #     Name: !Sub '${AWS::StackName}-S3VPCEndpoint-ID'
