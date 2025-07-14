@@ -115,50 +115,17 @@ Parameters:
     Default: templates/
 
 Resources:
-  # Parameters Stack
-  ParametersStack:
+  # VPC Stack
+  VPCStack:
     Type: AWS::CloudFormation::Stack
     Properties:
-      TemplateURL: !Sub 'https://${TemplatesBucketName}.s3.amazonaws.com/${TemplatesPrefix}parameters.yaml'
+      TemplateURL: !Sub 'https://${TemplatesBucketName}.s3.amazonaws.com/${TemplatesPrefix}vpc.yaml'
       Parameters:
         Environment: !Ref Environment
         Region: !Ref Region
         VpcCidr: !Ref VpcCidr
         Client: !Ref Client
-        VpcName: !Ref VpcName
-        PrivateCidrOffset: !Ref PrivateCidrOffset
-        PublicCidrOffset: !Ref PublicCidrOffset
         CostCenter: !Ref CostCenter
-        CompanyName: !Ref CompanyName
-        BaseDomain: !Ref BaseDomain
-        ACMCertArn: !Ref ACMCertArn
-        RecTransExpiration: !Ref RecTransExpiration
-        RecTransITTransition: !Ref RecTransITTransition
-        RecTransGlacierTransition: !Ref RecTransGlacierTransition
-        AbortIncomplete: !Ref AbortIncomplete
-        ExpReportsExpiration: !Ref ExpReportsExpiration
-        ScreenRecExpiration: !Ref ScreenRecExpiration
-        VoicemailExpiration: !Ref VoicemailExpiration
-        LexBotExpiration: !Ref LexBotExpiration
-        BucketLoggingExpiration: !Ref BucketLoggingExpiration
-      Tags:
-        - Key: StackType
-          Value: Parameters
-        - Key: Environment
-          Value: !Ref Environment
-        - Key: Client
-          Value: !Ref Client
-        - Key: DeployedBy
-          Value: cloudformation
-
-  # VPC Stack
-  VPCStack:
-    Type: AWS::CloudFormation::Stack
-    DependsOn: ParametersStack
-    Properties:
-      TemplateURL: !Sub 'https://${TemplatesBucketName}.s3.amazonaws.com/${TemplatesPrefix}vpc.yaml'
-      Parameters:
-        ParametersStackName: !Ref ParametersStack
       Tags:
         - Key: StackType
           Value: VPC
@@ -172,13 +139,24 @@ Resources:
   # S3 Stack
   S3Stack:
     Type: AWS::CloudFormation::Stack
-    DependsOn: 
-      - ParametersStack
-      - VPCStack
+    DependsOn: VPCStack
     Properties:
       TemplateURL: !Sub 'https://${TemplatesBucketName}.s3.amazonaws.com/${TemplatesPrefix}s3.yaml'
       Parameters:
-        ParametersStackName: !Ref ParametersStack
+        Environment: !Ref Environment
+        Region: !Ref Region
+        Client: !Ref Client
+        CostCenter: !Ref CostCenter
+        BaseDomain: !Ref BaseDomain
+        RecTransExpiration: !Ref RecTransExpiration
+        RecTransITTransition: !Ref RecTransITTransition
+        RecTransGlacierTransition: !Ref RecTransGlacierTransition
+        AbortIncomplete: !Ref AbortIncomplete
+        ExpReportsExpiration: !Ref ExpReportsExpiration
+        ScreenRecExpiration: !Ref ScreenRecExpiration
+        VoicemailExpiration: !Ref VoicemailExpiration
+        LexBotExpiration: !Ref LexBotExpiration
+        BucketLoggingExpiration: !Ref BucketLoggingExpiration
         VPCStackName: !Ref VPCStack
       Tags:
         - Key: StackType
@@ -191,12 +169,6 @@ Resources:
           Value: cloudformation
 
 Outputs:
-  ParametersStackId:
-    Description: Parameters Stack ID
-    Value: !Ref ParametersStack
-    Export:
-      Name: !Sub '${AWS::StackName}-ParametersStack-ID'
-
   VPCStackId:
     Description: VPC Stack ID
     Value: !Ref VPCStack

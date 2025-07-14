@@ -2,10 +2,77 @@ AWSTemplateFormatVersion: '2010-09-09'
 Description: 'S3 buckets for various use cases'
 
 Parameters:
-  ParametersStackName:
+  Environment:
     Type: String
-    Description: Name of the parameters stack
-  
+    Default: dev
+    AllowedValues: [dev, stg, prod]
+    Description: Environment name
+
+  Region:
+    Type: String
+    Default: us-east-1
+    Description: AWS region for deployment
+
+  Client:
+    Type: String
+    Default: gen-client5
+    Description: Client name
+
+  CostCenter:
+    Type: String
+    Default: '1003'
+    Description: Cost center for billing tags
+
+  BaseDomain:
+    Type: String
+    Default: genpactdemos.com
+    Description: Base domain name
+
+  RecTransExpiration:
+    Type: Number
+    Default: 2555
+    Description: Recording transcripts expiration days
+
+  RecTransITTransition:
+    Type: Number
+    Default: 90
+    Description: Recording transcripts IT transition days
+
+  RecTransGlacierTransition:
+    Type: Number
+    Default: 365
+    Description: Recording transcripts Glacier transition days
+
+  AbortIncomplete:
+    Type: Number
+    Default: 7
+    Description: Abort incomplete multipart upload days
+
+  ExpReportsExpiration:
+    Type: Number
+    Default: 180
+    Description: Exported reports expiration days
+
+  ScreenRecExpiration:
+    Type: Number
+    Default: 60
+    Description: Screen recording expiration days
+
+  VoicemailExpiration:
+    Type: Number
+    Default: 30
+    Description: Voicemail expiration days
+
+  LexBotExpiration:
+    Type: Number
+    Default: 180
+    Description: Lex bot expiration days
+
+  BucketLoggingExpiration:
+    Type: Number
+    Default: 180
+    Description: Bucket logging expiration days
+
   VPCStackName:
     Type: String
     Description: Name of the VPC stack
@@ -15,51 +82,30 @@ Resources:
   RecordingsAndTranscriptsBucket:
     Type: AWS::S3::Bucket
     Properties:
-      BucketName: !Sub 
-        - 'rec-trans-${Client}-${Region}-${Environment}'
-        - Client: 
-            Fn::ImportValue: !Sub '${ParametersStackName}-Client'
-          Region:
-            Fn::ImportValue: !Sub '${ParametersStackName}-Region'
-          Environment:
-            Fn::ImportValue: !Sub '${ParametersStackName}-Environment'
+      BucketName: !Sub 'rec-trans-${Client}-${Region}-${Environment}'
       VersioningConfiguration:
         Status: Enabled
       LifecycleConfiguration:
         Rules:
           - Id: recording-transcript
             Status: Enabled
-            ExpirationInDays: 
-              Fn::ImportValue: !Sub '${ParametersStackName}-RecTransExpiration'
+            ExpirationInDays: !Ref RecTransExpiration
             Transitions:
-              - TransitionInDays: 
-                  Fn::ImportValue: !Sub '${ParametersStackName}-RecTransITTransition'
+              - TransitionInDays: !Ref RecTransITTransition
                 StorageClass: INTELLIGENT_TIERING
-              - TransitionInDays: 
-                  Fn::ImportValue: !Sub '${ParametersStackName}-RecTransGlacierTransition'
+              - TransitionInDays: !Ref RecTransGlacierTransition
                 StorageClass: GLACIER
             AbortIncompleteMultipartUpload:
-              DaysAfterInitiation: 
-                Fn::ImportValue: !Sub '${ParametersStackName}-AbortIncomplete'
+              DaysAfterInitiation: !Ref AbortIncomplete
       Tags:
         - Key: Name
-          Value: !Sub 
-            - 'rec-trans-${Client}-${Region}-${Environment}'
-            - Client: 
-                Fn::ImportValue: !Sub '${ParametersStackName}-Client'
-              Region:
-                Fn::ImportValue: !Sub '${ParametersStackName}-Region'
-              Environment:
-                Fn::ImportValue: !Sub '${ParametersStackName}-Environment'
+          Value: !Sub 'rec-trans-${Client}-${Region}-${Environment}'
         - Key: environment
-          Value:
-            Fn::ImportValue: !Sub '${ParametersStackName}-Environment'
+          Value: !Ref Environment
         - Key: costCenter
-          Value:
-            Fn::ImportValue: !Sub '${ParametersStackName}-CostCenter'
+          Value: !Ref CostCenter
         - Key: appService
-          Value:
-            Fn::ImportValue: !Sub '${ParametersStackName}-Client'
+          Value: !Ref Client
         - Key: deployedBy
           Value: cloudformation
 
@@ -67,44 +113,25 @@ Resources:
   ExportedReportsBucket:
     Type: AWS::S3::Bucket
     Properties:
-      BucketName: !Sub 
-        - 'exp-reports-${Client}-${Region}-${Environment}'
-        - Client: 
-            Fn::ImportValue: !Sub '${ParametersStackName}-Client'
-          Region:
-            Fn::ImportValue: !Sub '${ParametersStackName}-Region'
-          Environment:
-            Fn::ImportValue: !Sub '${ParametersStackName}-Environment'
+      BucketName: !Sub 'exp-reports-${Client}-${Region}-${Environment}'
       VersioningConfiguration:
         Status: Enabled
       LifecycleConfiguration:
         Rules:
           - Id: exported-reports
             Status: Enabled
-            ExpirationInDays: 
-              Fn::ImportValue: !Sub '${ParametersStackName}-ExpReportsExpiration'
+            ExpirationInDays: !Ref ExpReportsExpiration
             AbortIncompleteMultipartUpload:
-              DaysAfterInitiation: 
-                Fn::ImportValue: !Sub '${ParametersStackName}-AbortIncomplete'
+              DaysAfterInitiation: !Ref AbortIncomplete
       Tags:
         - Key: Name
-          Value: !Sub 
-            - 'exp-reports-${Client}-${Region}-${Environment}'
-            - Client: 
-                Fn::ImportValue: !Sub '${ParametersStackName}-Client'
-              Region:
-                Fn::ImportValue: !Sub '${ParametersStackName}-Region'
-              Environment:
-                Fn::ImportValue: !Sub '${ParametersStackName}-Environment'
+          Value: !Sub 'exp-reports-${Client}-${Region}-${Environment}'
         - Key: environment
-          Value:
-            Fn::ImportValue: !Sub '${ParametersStackName}-Environment'
+          Value: !Ref Environment
         - Key: costCenter
-          Value:
-            Fn::ImportValue: !Sub '${ParametersStackName}-CostCenter'
+          Value: !Ref CostCenter
         - Key: appService
-          Value:
-            Fn::ImportValue: !Sub '${ParametersStackName}-Client'
+          Value: !Ref Client
         - Key: deployedBy
           Value: cloudformation
 
@@ -112,44 +139,25 @@ Resources:
   ScreenRecordingsBucket:
     Type: AWS::S3::Bucket
     Properties:
-      BucketName: !Sub 
-        - 'screen-rec-${Client}-${Region}-${Environment}'
-        - Client: 
-            Fn::ImportValue: !Sub '${ParametersStackName}-Client'
-          Region:
-            Fn::ImportValue: !Sub '${ParametersStackName}-Region'
-          Environment:
-            Fn::ImportValue: !Sub '${ParametersStackName}-Environment'
+      BucketName: !Sub 'screen-rec-${Client}-${Region}-${Environment}'
       VersioningConfiguration:
         Status: Enabled
       LifecycleConfiguration:
         Rules:
           - Id: screen-recordings
             Status: Enabled
-            ExpirationInDays: 
-              Fn::ImportValue: !Sub '${ParametersStackName}-ScreenRecExpiration'
+            ExpirationInDays: !Ref ScreenRecExpiration
             AbortIncompleteMultipartUpload:
-              DaysAfterInitiation: 
-                Fn::ImportValue: !Sub '${ParametersStackName}-AbortIncomplete'
+              DaysAfterInitiation: !Ref AbortIncomplete
       Tags:
         - Key: Name
-          Value: !Sub 
-            - 'screen-rec-${Client}-${Region}-${Environment}'
-            - Client: 
-                Fn::ImportValue: !Sub '${ParametersStackName}-Client'
-              Region:
-                Fn::ImportValue: !Sub '${ParametersStackName}-Region'
-              Environment:
-                Fn::ImportValue: !Sub '${ParametersStackName}-Environment'
+          Value: !Sub 'screen-rec-${Client}-${Region}-${Environment}'
         - Key: environment
-          Value:
-            Fn::ImportValue: !Sub '${ParametersStackName}-Environment'
+          Value: !Ref Environment
         - Key: costCenter
-          Value:
-            Fn::ImportValue: !Sub '${ParametersStackName}-CostCenter'
+          Value: !Ref CostCenter
         - Key: appService
-          Value:
-            Fn::ImportValue: !Sub '${ParametersStackName}-Client'
+          Value: !Ref Client
         - Key: deployedBy
           Value: cloudformation
 
@@ -157,44 +165,25 @@ Resources:
   VoiceMailBucket:
     Type: AWS::S3::Bucket
     Properties:
-      BucketName: !Sub 
-        - 'voicemail-${Client}-${Region}-${Environment}'
-        - Client: 
-            Fn::ImportValue: !Sub '${ParametersStackName}-Client'
-          Region:
-            Fn::ImportValue: !Sub '${ParametersStackName}-Region'
-          Environment:
-            Fn::ImportValue: !Sub '${ParametersStackName}-Environment'
+      BucketName: !Sub 'voicemail-${Client}-${Region}-${Environment}'
       VersioningConfiguration:
         Status: Enabled
       LifecycleConfiguration:
         Rules:
           - Id: voice_mail
             Status: Enabled
-            ExpirationInDays: 
-              Fn::ImportValue: !Sub '${ParametersStackName}-VoicemailExpiration'
+            ExpirationInDays: !Ref VoicemailExpiration
             AbortIncompleteMultipartUpload:
-              DaysAfterInitiation: 
-                Fn::ImportValue: !Sub '${ParametersStackName}-AbortIncomplete'
+              DaysAfterInitiation: !Ref AbortIncomplete
       Tags:
         - Key: Name
-          Value: !Sub 
-            - 'voicemail-${Client}-${Region}-${Environment}'
-            - Client: 
-                Fn::ImportValue: !Sub '${ParametersStackName}-Client'
-              Region:
-                Fn::ImportValue: !Sub '${ParametersStackName}-Region'
-              Environment:
-                Fn::ImportValue: !Sub '${ParametersStackName}-Environment'
+          Value: !Sub 'voicemail-${Client}-${Region}-${Environment}'
         - Key: environment
-          Value:
-            Fn::ImportValue: !Sub '${ParametersStackName}-Environment'
+          Value: !Ref Environment
         - Key: costCenter
-          Value:
-            Fn::ImportValue: !Sub '${ParametersStackName}-CostCenter'
+          Value: !Ref CostCenter
         - Key: appService
-          Value:
-            Fn::ImportValue: !Sub '${ParametersStackName}-Client'
+          Value: !Ref Client
         - Key: deployedBy
           Value: cloudformation
 
@@ -202,14 +191,7 @@ Resources:
   CommandCenterBucket:
     Type: AWS::S3::Bucket
     Properties:
-      BucketName: !Sub 
-        - 'command-center-${Client}-${Region}-${Environment}'
-        - Client: 
-            Fn::ImportValue: !Sub '${ParametersStackName}-Client'
-          Region:
-            Fn::ImportValue: !Sub '${ParametersStackName}-Region'
-          Environment:
-            Fn::ImportValue: !Sub '${ParametersStackName}-Environment'
+      BucketName: !Sub 'command-center-${Client}-${Region}-${Environment}'
       VersioningConfiguration:
         Status: Enabled
       LifecycleConfiguration:
@@ -217,27 +199,16 @@ Resources:
           - Id: ccenter
             Status: Enabled
             AbortIncompleteMultipartUpload:
-              DaysAfterInitiation: 
-                Fn::ImportValue: !Sub '${ParametersStackName}-AbortIncomplete'
+              DaysAfterInitiation: !Ref AbortIncomplete
       Tags:
         - Key: Name
-          Value: !Sub 
-            - 'command-center-${Client}-${Region}-${Environment}'
-            - Client: 
-                Fn::ImportValue: !Sub '${ParametersStackName}-Client'
-              Region:
-                Fn::ImportValue: !Sub '${ParametersStackName}-Region'
-              Environment:
-                Fn::ImportValue: !Sub '${ParametersStackName}-Environment'
+          Value: !Sub 'command-center-${Client}-${Region}-${Environment}'
         - Key: environment
-          Value:
-            Fn::ImportValue: !Sub '${ParametersStackName}-Environment'
+          Value: !Ref Environment
         - Key: costCenter
-          Value:
-            Fn::ImportValue: !Sub '${ParametersStackName}-CostCenter'
+          Value: !Ref CostCenter
         - Key: appService
-          Value:
-            Fn::ImportValue: !Sub '${ParametersStackName}-Client'
+          Value: !Ref Client
         - Key: deployedBy
           Value: cloudformation
 
@@ -245,25 +216,16 @@ Resources:
   LexBotGrammarBucket:
     Type: AWS::S3::Bucket
     Properties:
-      BucketName: !Sub 
-        - 'lex-bot-grammar-${Client}-${Region}-${Environment}'
-        - Client: 
-            Fn::ImportValue: !Sub '${ParametersStackName}-Client'
-          Region:
-            Fn::ImportValue: !Sub '${ParametersStackName}-Region'
-          Environment:
-            Fn::ImportValue: !Sub '${ParametersStackName}-Environment'
+      BucketName: !Sub 'lex-bot-grammar-${Client}-${Region}-${Environment}'
       VersioningConfiguration:
         Status: Enabled
       LifecycleConfiguration:
         Rules:
           - Id: lex-bot-grammer
             Status: Enabled
-            ExpirationInDays: 
-              Fn::ImportValue: !Sub '${ParametersStackName}-LexBotExpiration'
+            ExpirationInDays: !Ref LexBotExpiration
             AbortIncompleteMultipartUpload:
-              DaysAfterInitiation: 
-                Fn::ImportValue: !Sub '${ParametersStackName}-AbortIncomplete'
+              DaysAfterInitiation: !Ref AbortIncomplete
       PublicAccessBlockConfiguration:
         BlockPublicAcls: true
         BlockPublicPolicy: true
@@ -271,23 +233,13 @@ Resources:
         RestrictPublicBuckets: true
       Tags:
         - Key: Name
-          Value: !Sub 
-            - 'lex-bot-grammar-${Client}-${Region}-${Environment}'
-            - Client: 
-                Fn::ImportValue: !Sub '${ParametersStackName}-Client'
-              Region:
-                Fn::ImportValue: !Sub '${ParametersStackName}-Region'
-              Environment:
-                Fn::ImportValue: !Sub '${ParametersStackName}-Environment'
+          Value: !Sub 'lex-bot-grammar-${Client}-${Region}-${Environment}'
         - Key: environment
-          Value:
-            Fn::ImportValue: !Sub '${ParametersStackName}-Environment'
+          Value: !Ref Environment
         - Key: costCenter
-          Value:
-            Fn::ImportValue: !Sub '${ParametersStackName}-CostCenter'
+          Value: !Ref CostCenter
         - Key: appService
-          Value:
-            Fn::ImportValue: !Sub '${ParametersStackName}-Client'
+          Value: !Ref Client
         - Key: deployedBy
           Value: cloudformation
 
@@ -295,44 +247,25 @@ Resources:
   BucketLoggingBucket:
     Type: AWS::S3::Bucket
     Properties:
-      BucketName: !Sub 
-        - 'bucket-logging-${Client}-${Region}-${Environment}'
-        - Client: 
-            Fn::ImportValue: !Sub '${ParametersStackName}-Client'
-          Region:
-            Fn::ImportValue: !Sub '${ParametersStackName}-Region'
-          Environment:
-            Fn::ImportValue: !Sub '${ParametersStackName}-Environment'
+      BucketName: !Sub 'bucket-logging-${Client}-${Region}-${Environment}'
       VersioningConfiguration:
         Status: Enabled
       LifecycleConfiguration:
         Rules:
           - Id: bucket-logging
             Status: Enabled
-            ExpirationInDays: 
-              Fn::ImportValue: !Sub '${ParametersStackName}-BucketLoggingExpiration'
+            ExpirationInDays: !Ref BucketLoggingExpiration
             AbortIncompleteMultipartUpload:
-              DaysAfterInitiation: 
-                Fn::ImportValue: !Sub '${ParametersStackName}-AbortIncomplete'
+              DaysAfterInitiation: !Ref AbortIncomplete
       Tags:
         - Key: Name
-          Value: !Sub 
-            - 'bucket-logging-${Client}-${Region}-${Environment}'
-            - Client: 
-                Fn::ImportValue: !Sub '${ParametersStackName}-Client'
-              Region:
-                Fn::ImportValue: !Sub '${ParametersStackName}-Region'
-              Environment:
-                Fn::ImportValue: !Sub '${ParametersStackName}-Environment'
+          Value: !Sub 'bucket-logging-${Client}-${Region}-${Environment}'
         - Key: environment
-          Value:
-            Fn::ImportValue: !Sub '${ParametersStackName}-Environment'
+          Value: !Ref Environment
         - Key: costCenter
-          Value:
-            Fn::ImportValue: !Sub '${ParametersStackName}-CostCenter'
+          Value: !Ref CostCenter
         - Key: appService
-          Value:
-            Fn::ImportValue: !Sub '${ParametersStackName}-Client'
+          Value: !Ref Client
         - Key: deployedBy
           Value: cloudformation
 
@@ -340,14 +273,7 @@ Resources:
   ContactEvaluationBucket:
     Type: AWS::S3::Bucket
     Properties:
-      BucketName: !Sub 
-        - 'contact-evaluation-${Client}-${Region}-${Environment}'
-        - Client: 
-            Fn::ImportValue: !Sub '${ParametersStackName}-Client'
-          Region:
-            Fn::ImportValue: !Sub '${ParametersStackName}-Region'
-          Environment:
-            Fn::ImportValue: !Sub '${ParametersStackName}-Environment'
+      BucketName: !Sub 'contact-evaluation-${Client}-${Region}-${Environment}'
       VersioningConfiguration:
         Status: Enabled
       LifecycleConfiguration:
@@ -355,27 +281,16 @@ Resources:
           - Id: contact-evaluation
             Status: Enabled
             AbortIncompleteMultipartUpload:
-              DaysAfterInitiation: 
-                Fn::ImportValue: !Sub '${ParametersStackName}-AbortIncomplete'
+              DaysAfterInitiation: !Ref AbortIncomplete
       Tags:
         - Key: Name
-          Value: !Sub 
-            - 'contact-evaluation-${Client}-${Region}-${Environment}'
-            - Client: 
-                Fn::ImportValue: !Sub '${ParametersStackName}-Client'
-              Region:
-                Fn::ImportValue: !Sub '${ParametersStackName}-Region'
-              Environment:
-                Fn::ImportValue: !Sub '${ParametersStackName}-Environment'
+          Value: !Sub 'contact-evaluation-${Client}-${Region}-${Environment}'
         - Key: environment
-          Value:
-            Fn::ImportValue: !Sub '${ParametersStackName}-Environment'
+          Value: !Ref Environment
         - Key: costCenter
-          Value:
-            Fn::ImportValue: !Sub '${ParametersStackName}-CostCenter'
+          Value: !Ref CostCenter
         - Key: appService
-          Value:
-            Fn::ImportValue: !Sub '${ParametersStackName}-Client'
+          Value: !Ref Client
         - Key: deployedBy
           Value: cloudformation
 
@@ -383,12 +298,7 @@ Resources:
   CCAdminToolBucket:
     Type: AWS::S3::Bucket
     Properties:
-      BucketName: !Sub 
-        - '${Client}-cc-admin-tool.${BaseDomain}'
-        - Client: 
-            Fn::ImportValue: !Sub '${ParametersStackName}-Client'
-          BaseDomain:
-            Fn::ImportValue: !Sub '${ParametersStackName}-BaseDomain'
+      BucketName: !Sub '${Client}-cc-admin-tool.${BaseDomain}'
       VersioningConfiguration:
         Status: Enabled
       LifecycleConfiguration:
@@ -396,28 +306,19 @@ Resources:
           - Id: cc-admin-tool
             Status: Enabled
             AbortIncompleteMultipartUpload:
-              DaysAfterInitiation: 
-                Fn::ImportValue: !Sub '${ParametersStackName}-AbortIncomplete'
+              DaysAfterInitiation: !Ref AbortIncomplete
       WebsiteConfiguration:
         IndexDocument: index.html
         ErrorDocument: error.html
       Tags:
         - Key: Name
-          Value: !Sub 
-            - '${Client}-cc-admin-tool.${BaseDomain}'
-            - Client: 
-                Fn::ImportValue: !Sub '${ParametersStackName}-Client'
-              BaseDomain:
-                Fn::ImportValue: !Sub '${ParametersStackName}-BaseDomain'
+          Value: !Sub '${Client}-cc-admin-tool.${BaseDomain}'
         - Key: environment
-          Value:
-            Fn::ImportValue: !Sub '${ParametersStackName}-Environment'
+          Value: !Ref Environment
         - Key: costCenter
-          Value:
-            Fn::ImportValue: !Sub '${ParametersStackName}-CostCenter'
+          Value: !Ref CostCenter
         - Key: appService
-          Value:
-            Fn::ImportValue: !Sub '${ParametersStackName}-Client'
+          Value: !Ref Client
         - Key: deployedBy
           Value: cloudformation
 

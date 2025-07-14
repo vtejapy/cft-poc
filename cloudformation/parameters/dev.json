@@ -44,58 +44,6 @@
     "ParameterValue": "5e44efe1-86d0-4bcd-b259-41ce929556c8"
   },
   {
-    "ParameterKey": "RdsEngineVersion",
-    "ParameterValue": "16.3"
-  },
-  {
-    "ParameterKey": "RdsInstanceClass",
-    "ParameterValue": "db.t3.medium"
-  },
-  {
-    "ParameterKey": "RdsAllocatedStorage",
-    "ParameterValue": "100"
-  },
-  {
-    "ParameterKey": "RdsStorageType",
-    "ParameterValue": "gp3"
-  },
-  {
-    "ParameterKey": "RdsBackupRetentionPeriod",
-    "ParameterValue": "7"
-  },
-  {
-    "ParameterKey": "RdsUsername",
-    "ParameterValue": "genpactadmin"
-  },
-  {
-    "ParameterKey": "DatabasePort",
-    "ParameterValue": "5432"
-  },
-  {
-    "ParameterKey": "SchemaName",
-    "ParameterValue": "agent_desktop_assist"
-  },
-  {
-    "ParameterKey": "LambdaMemorySize",
-    "ParameterValue": "128"
-  },
-  {
-    "ParameterKey": "LambdaTimeout",
-    "ParameterValue": "30"
-  },
-  {
-    "ParameterKey": "LambdaRuntime",
-    "ParameterValue": "python3.10"
-  },
-  {
-    "ParameterKey": "LambdaNodeJSRuntime",
-    "ParameterValue": "nodejs18.x"
-  },
-  {
-    "ParameterKey": "LambdaNodeJS20Runtime",
-    "ParameterValue": "nodejs20.x"
-  },
-  {
     "ParameterKey": "RecTransExpiration",
     "ParameterValue": "2555"
   },
@@ -110,10 +58,6 @@
   {
     "ParameterKey": "AbortIncomplete",
     "ParameterValue": "7"
-  },
-  {
-    "ParameterKey": "CCenterExpiration",
-    "ParameterValue": "360"
   },
   {
     "ParameterKey": "ExpReportsExpiration",
@@ -134,25 +78,5 @@
   {
     "ParameterKey": "BucketLoggingExpiration",
     "ParameterValue": "180"
-  },
-  {
-    "ParameterKey": "SMTPFromAddress",
-    "ParameterValue": "gnwcc-dev@genworth.com"
-  },
-  {
-    "ParameterKey": "SMTPHost",
-    "ParameterValue": "smtp.genworth.net"
-  },
-  {
-    "ParameterKey": "SMTPPort",
-    "ParameterValue": "587"
-  },
-  {
-    "ParameterKey": "SMTPHostname",
-    "ParameterValue": "test.genpact.com"
-  },
-  {
-    "ParameterKey": "ConnectAllowedOrigins",
-    "ParameterValue": "https://test.com"
   }
 ]

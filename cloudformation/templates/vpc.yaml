@@ -2,45 +2,49 @@ AWSTemplateFormatVersion: '2010-09-09'
 Description: 'VPC infrastructure with public and private subnets'
 
 Parameters:
-  ParametersStackName:
+  Environment:
     Type: String
-    Description: Name of the parameters stack
+    Default: dev
+    AllowedValues: [dev, stg, prod]
+    Description: Environment name
 
-Mappings:
-  AvailabilityZones:
-    us-east-1:
-      AZ1: us-east-1a
-      AZ2: us-east-1b
-      AZ3: us-east-1c
+  Region:
+    Type: String
+    Default: us-east-1
+    Description: AWS region for deployment
+
+  VpcCidr:
+    Type: String
+    Default: 10.113.0.0/16
+    Description: CIDR block for the VPC
+
+  Client:
+    Type: String
+    Default: gen-client5
+    Description: Client name
+
+  CostCenter:
+    Type: String
+    Default: '1003'
+    Description: Cost center for billing tags
 
 Resources:
   # VPC
   VPC:
     Type: AWS::EC2::VPC
     Properties:
-      CidrBlock: 
-        Fn::ImportValue: !Sub '${ParametersStackName}-VpcCidr'
+      CidrBlock: !Ref VpcCidr
       EnableDnsSupport: true
       EnableDnsHostnames: true
       Tags:
         - Key: Name
-          Value: !Sub 
-            - '${Client}-vpc-${Region}-${Environment}'
-            - Client: 
-                Fn::ImportValue: !Sub '${ParametersStackName}-Client'
-              Region:
-                Fn::ImportValue: !Sub '${ParametersStackName}-Region'
-              Environment:
-                Fn::ImportValue: !Sub '${ParametersStackName}-Environment'
+          Value: !Sub '${Client}-vpc-${Region}-${Environment}'
         - Key: environment
-          Value:
-            Fn::ImportValue: !Sub '${ParametersStackName}-Environment'
+          Value: !Ref Environment
         - Key: costCenter
-          Value:
-            Fn::ImportValue: !Sub '${ParametersStackName}-CostCenter'
+          Value: !Ref CostCenter
         - Key: appService
-          Value:
-            Fn::ImportValue: !Sub '${ParametersStackName}-Client'
+          Value: !Ref Client
         - Key: deployedBy
           Value: cloudformation
 
@@ -50,14 +54,7 @@ Resources:
     Properties:
       Tags:
         - Key: Name
-          Value: !Sub 
-            - '${Client}-vpc-${Region}-${Environment}-igw'
-            - Client: 
-                Fn::ImportValue: !Sub '${ParametersStackName}-Client'
-              Region:
-                Fn::ImportValue: !Sub '${ParametersStackName}-Region'
-              Environment:
-                Fn::ImportValue: !Sub '${ParametersStackName}-Environment'
+          Value: !Sub '${Client}-vpc-${Region}-${Environment}-igw'
 
   AttachGateway:
     Type: AWS::EC2::VPCGatewayAttachment
@@ -70,117 +67,92 @@ Resources:
     Type: AWS::EC2::Subnet
     Properties:
       VpcId: !Ref VPC
-      CidrBlock: !Select 
-        - 0
-        - !Cidr 
-          - Fn::ImportValue: !Sub '${ParametersStackName}-VpcCidr'
-          - 256
-          - 8
-      AvailabilityZone: !FindInMap [AvailabilityZones, !Ref 'AWS::Region', AZ1]
+      CidrBlock: !Select [10, !Cidr [!Ref VpcCidr, 256, 8]]
+      AvailabilityZone: !Select [0, !GetAZs '']
       Tags:
         - Key: Name
-          Value: !Sub 
-            - '${Client}-vpc-${Region}-${Environment}-private-subnet-${AZ}'
-            - Client: 
-                Fn::ImportValue: !Sub '${ParametersStackName}-Client'
-              Region:
-                Fn::ImportValue: !Sub '${ParametersStackName}-Region'
-              Environment:
-                Fn::ImportValue: !Sub '${ParametersStackName}-Environment'
-              AZ: !FindInMap [AvailabilityZones, !Ref 'AWS::Region', AZ1]
+          Value: !Sub '${Client}-vpc-${Region}-${Environment}-private-subnet-1'
+        - Key: environment
+          Value: !Ref Environment
+        - Key: costCenter
+          Value: !Ref CostCenter
+        - Key: appService
+          Value: !Ref Client
+        - Key: deployedBy
+          Value: cloudformation
 
   PrivateSubnet2:
     Type: AWS::EC2::Subnet
     Properties:
       VpcId: !Ref VPC
-      CidrBlock: !Select 
-        - 1
-        - !Cidr 
-          - Fn::ImportValue: !Sub '${ParametersStackName}-VpcCidr'
-          - 256
-          - 8
-      AvailabilityZone: !FindInMap [AvailabilityZones, !Ref 'AWS::Region', AZ2]
+      CidrBlock: !Select [11, !Cidr [!Ref VpcCidr, 256, 8]]
+      AvailabilityZone: !Select [1, !GetAZs '']
       Tags:
         - Key: Name
-          Value: !Sub 
-            - '${Client}-vpc-${Region}-${Environment}-private-subnet-${AZ}'
-            - Client: 
-                Fn::ImportValue: !Sub '${ParametersStackName}-Client'
-              Region:
-                Fn::ImportValue: !Sub '${ParametersStackName}-Region'
-              Environment:
-                Fn::ImportValue: !Sub '${ParametersStackName}-Environment'
-              AZ: !FindInMap [AvailabilityZones, !Ref 'AWS::Region', AZ2]
+          Value: !Sub '${Client}-vpc-${Region}-${Environment}-private-subnet-2'
+        - Key: environment
+          Value: !Ref Environment
+        - Key: costCenter
+          Value: !Ref CostCenter
+        - Key: appService
+          Value: !Ref Client
+        - Key: deployedBy
+          Value: cloudformation
 
   PrivateSubnet3:
     Type: AWS::EC2::Subnet
     Properties:
       VpcId: !Ref VPC
-      CidrBlock: !Select 
-        - 2
-        - !Cidr 
-          - Fn::ImportValue: !Sub '${ParametersStackName}-VpcCidr'
-          - 256
-          - 8
-      AvailabilityZone: !FindInMap [AvailabilityZones, !Ref 'AWS::Region', AZ3]
+      CidrBlock: !Select [12, !Cidr [!Ref VpcCidr, 256, 8]]
+      AvailabilityZone: !Select [2, !GetAZs '']
       Tags:
         - Key: Name
-          Value: !Sub 
-            - '${Client}-vpc-${Region}-${Environment}-private-subnet-${AZ}'
-            - Client: 
-                Fn::ImportValue: !Sub '${ParametersStackName}-Client'
-              Region:
-                Fn::ImportValue: !Sub '${ParametersStackName}-Region'
-              Environment:
-                Fn::ImportValue: !Sub '${ParametersStackName}-Environment'
-              AZ: !FindInMap [AvailabilityZones, !Ref 'AWS::Region', AZ3]
+          Value: !Sub '${Client}-vpc-${Region}-${Environment}-private-subnet-3'
+        - Key: environment
+          Value: !Ref Environment
+        - Key: costCenter
+          Value: !Ref CostCenter
+        - Key: appService
+          Value: !Ref Client
+        - Key: deployedBy
+          Value: cloudformation
 
   # Public Subnets
   PublicSubnet1:
     Type: AWS::EC2::Subnet
     Properties:
       VpcId: !Ref VPC
-      CidrBlock: !Select 
-        - 20
-        - !Cidr 
-          - Fn::ImportValue: !Sub '${ParametersStackName}-VpcCidr'
-          - 256
-          - 8
-      AvailabilityZone: !FindInMap [AvailabilityZones, !Ref 'AWS::Region', AZ1]
+      CidrBlock: !Select [20, !Cidr [!Ref VpcCidr, 256, 8]]
+      AvailabilityZone: !Select [0, !GetAZs '']
       Tags:
         - Key: Name
-          Value: !Sub 
-            - '${Client}-vpc-${Region}-${Environment}-public-subnet-${AZ}'
-            - Client: 
-                Fn::ImportValue: !Sub '${ParametersStackName}-Client'
-              Region:
-                Fn::ImportValue: !Sub '${ParametersStackName}-Region'
-              Environment:
-                Fn::ImportValue: !Sub '${ParametersStackName}-Environment'
-              AZ: !FindInMap [AvailabilityZones, !Ref 'AWS::Region', AZ1]
+          Value: !Sub '${Client}-vpc-${Region}-${Environment}-public-subnet-1'
+        - Key: environment
+          Value: !Ref Environment
+        - Key: costCenter
+          Value: !Ref CostCenter
+        - Key: appService
+          Value: !Ref Client
+        - Key: deployedBy
+          Value: cloudformation
 
   PublicSubnet2:
     Type: AWS::EC2::Subnet
     Properties:
       VpcId: !Ref VPC
-      CidrBlock: !Select 
-        - 21
-        - !Cidr 
-          - Fn::ImportValue: !Sub '${ParametersStackName}-VpcCidr'
-          - 256
-          - 8
-      AvailabilityZone: !FindInMap [AvailabilityZones, !Ref 'AWS::Region', AZ2]
+      CidrBlock: !Select [21, !Cidr [!Ref VpcCidr, 256, 8]]
+      AvailabilityZone: !Select [1, !GetAZs '']
       Tags:
         - Key: Name
-          Value: !Sub 
-            - '${Client}-vpc-${Region}-${Environment}-public-subnet-${AZ}'
-            - Client: 
-                Fn::ImportValue: !Sub '${ParametersStackName}-Client'
-              Region:
-                Fn::ImportValue: !Sub '${ParametersStackName}-Region'
-              Environment:
-                Fn::ImportValue: !Sub '${ParametersStackName}-Environment'
-              AZ: !FindInMap [AvailabilityZones, !Ref 'AWS::Region', AZ2]
+          Value: !Sub '${Client}-vpc-${Region}-${Environment}-public-subnet-2'
+        - Key: environment
+          Value: !Ref Environment
+        - Key: costCenter
+          Value: !Ref CostCenter
+        - Key: appService
+          Value: !Ref Client
+        - Key: deployedBy
+          Value: cloudformation
 
   # NAT Gateway
   NATGatewayEIP:
@@ -196,14 +168,7 @@ Resources:
       SubnetId: !Ref PublicSubnet1
       Tags:
         - Key: Name
-          Value: !Sub 
-            - '${Client}-vpc-${Region}-${Environment}-nat'
-            - Client: 
-                Fn::ImportValue: !Sub '${ParametersStackName}-Client'
-              Region:
-                Fn::ImportValue: !Sub '${ParametersStackName}-Region'
-              Environment:
-                Fn::ImportValue: !Sub '${ParametersStackName}-Environment'
+          Value: !Sub '${Client}-vpc-${Region}-${Environment}-nat'
 
   # Route Tables
   PrivateRouteTable:
@@ -212,14 +177,7 @@ Resources:
       VpcId: !Ref VPC
       Tags:
         - Key: Name
-          Value: !Sub 
-            - '${Client}-vpc-${Region}-${Environment}-private-rt'
-            - Client: 
-                Fn::ImportValue: !Sub '${ParametersStackName}-Client'
-              Region:
-                Fn::ImportValue: !Sub '${ParametersStackName}-Region'
-              Environment:
-                Fn::ImportValue: !Sub '${ParametersStackName}-Environment'
+          Value: !Sub '${Client}-vpc-${Region}-${Environment}-private-rt'
 
   PublicRouteTable:
     Type: AWS::EC2::RouteTable
@@ -227,14 +185,7 @@ Resources:
       VpcId: !Ref VPC
       Tags:
         - Key: Name
-          Value: !Sub 
-            - '${Client}-vpc-${Region}-${Environment}-public-rt'
-            - Client: 
-                Fn::ImportValue: !Sub '${ParametersStackName}-Client'
-              Region:
-                Fn::ImportValue: !Sub '${ParametersStackName}-Region'
-              Environment:
-                Fn::ImportValue: !Sub '${ParametersStackName}-Environment'
+          Value: !Sub '${Client}-vpc-${Region}-${Environment}-public-rt'
 
   # Routes
   PrivateRoute:
@@ -275,6 +226,12 @@ Resources:
     Type: AWS::EC2::SubnetRouteTableAssociation
     Properties:
       SubnetId: !Ref PublicSubnet1
+      RouteTableId: !Ref PublicRouteTable
+
+  PublicSubnetRouteTableAssociation2:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PublicSubnet2
       RouteTableId: !Ref PublicRouteTable
 
   # VPC Endpoint for S3
