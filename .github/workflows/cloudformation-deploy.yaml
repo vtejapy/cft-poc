@@ -201,7 +201,7 @@ jobs:
   change-preview:
     runs-on: ubuntu-latest
     needs: [setup, validate, upload-templates]
-    if: needs.setup.outputs.action == 'plan' || github.event_name == 'pull_request'
+    if: needs.setup.outputs.action == 'plan'
     continue-on-error: true
     steps:
       - name: Checkout code
@@ -244,10 +244,20 @@ jobs:
           # Wait a moment for S3 consistency
           sleep 5
           
-          # Check if stack exists
+          # Check if stack exists and its status
           if aws cloudformation describe-stacks --stack-name ${{ needs.setup.outputs.stack-name }} 2>/dev/null; then
-            STACK_EXISTS=true
-            echo "Stack exists, creating change set for UPDATE..."
+            STACK_STATUS=$(aws cloudformation describe-stacks --stack-name ${{ needs.setup.outputs.stack-name }} --query 'Stacks[0].StackStatus' --output text)
+            echo "📋 Current stack status: $STACK_STATUS"
+            
+            if [[ "$STACK_STATUS" == "ROLLBACK_COMPLETE" ]]; then
+              echo "⚠️  Stack is in ROLLBACK_COMPLETE state, cannot create change set"
+              echo "💡 This stack needs to be deleted before creating a new deployment"
+              echo "🔍 For this preview, showing what would be created from scratch..."
+              STACK_EXISTS=false
+            else
+              STACK_EXISTS=true
+              echo "Stack exists, creating change set for UPDATE..."
+            fi
           else
             STACK_EXISTS=false
             echo "Stack does not exist, creating change set for CREATE..."
