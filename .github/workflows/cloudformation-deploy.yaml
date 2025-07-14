@@ -1,0 +1,367 @@
+name: CloudFormation Deployment
+
+on:
+  push:
+    branches: [main, develop]
+    paths:
+      - 'cloudformation/**'
+  pull_request:
+    branches: [main, develop]
+    paths:
+      - 'cloudformation/**'
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Environment to deploy to'
+        required: true
+        default: 'dev'
+        type: choice
+        options:
+          - dev
+          - stg
+          - prod
+      action:
+        description: 'Action to perform'
+        required: true
+        default: 'plan'
+        type: choice
+        options:
+          - plan
+          - deploy
+          - destroy
+
+env:
+  AWS_REGION: us-east-1
+  TEMPLATES_BUCKET: cloudformation-templates-${{ github.event.inputs.environment || 'dev' }}-${{ github.run_id }}
+  STACK_NAME: infrastructure-${{ github.event.inputs.environment || 'dev' }}
+
+jobs:
+  setup:
+    runs-on: ubuntu-latest
+    outputs:
+      environment: ${{ steps.env.outputs.environment }}
+      action: ${{ steps.env.outputs.action }}
+      templates-bucket: ${{ steps.env.outputs.templates-bucket }}
+      stack-name: ${{ steps.env.outputs.stack-name }}
+    steps:
+      - name: Determine environment and action
+        id: env
+        run: |
+          if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
+            echo "environment=${{ github.event.inputs.environment }}" >> $GITHUB_OUTPUT
+            echo "action=${{ github.event.inputs.action }}" >> $GITHUB_OUTPUT
+          elif [[ "${{ github.event_name }}" == "push" ]]; then
+            if [[ "${{ github.ref }}" == "refs/heads/main" ]]; then
+              echo "environment=prod" >> $GITHUB_OUTPUT
+              echo "action=deploy" >> $GITHUB_OUTPUT
+            else
+              echo "environment=dev" >> $GITHUB_OUTPUT
+              echo "action=deploy" >> $GITHUB_OUTPUT
+            fi
+          else
+            echo "environment=dev" >> $GITHUB_OUTPUT
+            echo "action=plan" >> $GITHUB_OUTPUT
+          fi
+          echo "templates-bucket=cloudformation-templates-$(echo $environment)-${{ github.run_id }}" >> $GITHUB_OUTPUT
+          echo "stack-name=infrastructure-$(echo $environment)" >> $GITHUB_OUTPUT
+
+  validate:
+    runs-on: ubuntu-latest
+    needs: setup
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Validate CloudFormation templates
+        run: |
+          echo "🔍 Validating CloudFormation templates..."
+          
+          # Validate all templates
+          for template in cloudformation/templates/*.yaml cloudformation/main.yaml; do
+            if [[ -f "$template" ]]; then
+              echo "Validating $template..."
+              aws cloudformation validate-template --template-body file://$template
+            fi
+          done
+          
+          echo "✅ All templates are valid!"
+
+  upload-templates:
+    runs-on: ubuntu-latest
+    needs: [setup, validate]
+    if: needs.setup.outputs.action != 'destroy'
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Create S3 bucket for templates
+        run: |
+          # Create bucket if it doesn't exist
+          if ! aws s3 ls "s3://${{ needs.setup.outputs.templates-bucket }}" 2>/dev/null; then
+            aws s3 mb s3://${{ needs.setup.outputs.templates-bucket }} --region ${{ env.AWS_REGION }}
+            
+            # Enable versioning
+            aws s3api put-bucket-versioning \
+              --bucket ${{ needs.setup.outputs.templates-bucket }} \
+              --versioning-configuration Status=Enabled
+          fi
+
+      - name: Upload CloudFormation templates
+        run: |
+          echo "📤 Uploading templates to S3..."
+          aws s3 sync cloudformation/templates/ s3://${{ needs.setup.outputs.templates-bucket }}/templates/ --delete
+          aws s3 cp cloudformation/main.yaml s3://${{ needs.setup.outputs.templates-bucket }}/main.yaml
+          echo "✅ Templates uploaded successfully!"
+
+  change-preview:
+    runs-on: ubuntu-latest
+    needs: [setup, validate, upload-templates]
+    if: needs.setup.outputs.action == 'plan' || (needs.setup.outputs.action == 'deploy' && github.event_name == 'pull_request')
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Generate CloudFormation Change Set
+        id: changeset
+        run: |
+          echo "🔍 Generating CloudFormation change set..."
+          
+          CHANGESET_NAME="changeset-${{ github.run_id }}-${{ github.run_attempt }}"
+          
+          # Check if stack exists
+          if aws cloudformation describe-stacks --stack-name ${{ needs.setup.outputs.stack-name }} 2>/dev/null; then
+            STACK_EXISTS=true
+            echo "Stack exists, creating change set for UPDATE..."
+          else
+            STACK_EXISTS=false
+            echo "Stack does not exist, creating change set for CREATE..."
+          fi
+          
+          # Create change set
+          if [[ "$STACK_EXISTS" == "true" ]]; then
+            aws cloudformation create-change-set \
+              --stack-name ${{ needs.setup.outputs.stack-name }} \
+              --change-set-name $CHANGESET_NAME \
+              --template-url https://${{ needs.setup.outputs.templates-bucket }}.s3.amazonaws.com/main.yaml \
+              --parameters file://cloudformation/parameters/${{ needs.setup.outputs.environment }}.json \
+              --capabilities CAPABILITY_IAM CAPABILITY_NAMED_IAM \
+              --change-set-type UPDATE
+          else
+            aws cloudformation create-change-set \
+              --stack-name ${{ needs.setup.outputs.stack-name }} \
+              --change-set-name $CHANGESET_NAME \
+              --template-url https://${{ needs.setup.outputs.templates-bucket }}.s3.amazonaws.com/main.yaml \
+              --parameters file://cloudformation/parameters/${{ needs.setup.outputs.environment }}.json \
+              --capabilities CAPABILITY_IAM CAPABILITY_NAMED_IAM \
+              --change-set-type CREATE
+          fi
+          
+          echo "changeset-name=$CHANGESET_NAME" >> $GITHUB_OUTPUT
+
+      - name: Wait for change set creation
+        run: |
+          echo "⏳ Waiting for change set creation to complete..."
+          aws cloudformation wait change-set-create-complete \
+            --stack-name ${{ needs.setup.outputs.stack-name }} \
+            --change-set-name ${{ steps.changeset.outputs.changeset-name }}
+
+      - name: Display change set details
+        run: |
+          echo "📋 Change Set Details:"
+          echo "===================="
+          
+          # Get change set details
+          CHANGESET_OUTPUT=$(aws cloudformation describe-change-set \
+            --stack-name ${{ needs.setup.outputs.stack-name }} \
+            --change-set-name ${{ steps.changeset.outputs.changeset-name }} \
+            --output table)
+          
+          echo "$CHANGESET_OUTPUT"
+          
+          # Get changes in JSON format for parsing
+          CHANGES=$(aws cloudformation describe-change-set \
+            --stack-name ${{ needs.setup.outputs.stack-name }} \
+            --change-set-name ${{ steps.changeset.outputs.changeset-name }} \
+            --query 'Changes[*].[Action,ResourceChange.LogicalResourceId,ResourceChange.ResourceType,ResourceChange.Replacement]' \
+            --output table)
+          
+          echo ""
+          echo "📊 Summary of Changes:"
+          echo "====================="
+          echo "$CHANGES"
+          
+          # Check if there are any changes
+          CHANGE_COUNT=$(aws cloudformation describe-change-set \
+            --stack-name ${{ needs.setup.outputs.stack-name }} \
+            --change-set-name ${{ steps.changeset.outputs.changeset-name }} \
+            --query 'length(Changes)' \
+            --output text)
+          
+          if [[ "$CHANGE_COUNT" == "0" ]]; then
+            echo "⚠️  No changes detected in the stack."
+          else
+            echo "✅ $CHANGE_COUNT change(s) detected."
+          fi
+
+      - name: Comment on PR with change set
+        if: github.event_name == 'pull_request'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const { execSync } = require('child_process');
+            
+            try {
+              const changeset = execSync(`
+                aws cloudformation describe-change-set \
+                  --stack-name ${{ needs.setup.outputs.stack-name }} \
+                  --change-set-name ${{ steps.changeset.outputs.changeset-name }} \
+                  --query 'Changes[*].[Action,ResourceChange.LogicalResourceId,ResourceChange.ResourceType,ResourceChange.Replacement]' \
+                  --output table
+              `).toString();
+              
+              const comment = `## 🔍 CloudFormation Change Preview
+              
+              **Environment:** ${{ needs.setup.outputs.environment }}
+              **Stack:** ${{ needs.setup.outputs.stack-name }}
+              
+              ### Changes to be applied:
+              \`\`\`
+              ${changeset}
+              \`\`\`
+              
+              > This is a preview of changes that would be applied if this PR is merged.
+              `;
+              
+              github.rest.issues.createComment({
+                issue_number: context.issue.number,
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                body: comment
+              });
+            } catch (error) {
+              console.error('Failed to create comment:', error);
+            }
+
+      - name: Clean up change set
+        if: always()
+        run: |
+          aws cloudformation delete-change-set \
+            --stack-name ${{ needs.setup.outputs.stack-name }} \
+            --change-set-name ${{ steps.changeset.outputs.changeset-name }} || true
+
+  deploy:
+    runs-on: ubuntu-latest
+    needs: [setup, validate, upload-templates]
+    if: needs.setup.outputs.action == 'deploy' && github.event_name != 'pull_request'
+    environment: ${{ needs.setup.outputs.environment }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Deploy CloudFormation stack
+        run: |
+          echo "🚀 Deploying CloudFormation stack..."
+          
+          aws cloudformation deploy \
+            --template-url https://${{ needs.setup.outputs.templates-bucket }}.s3.amazonaws.com/main.yaml \
+            --stack-name ${{ needs.setup.outputs.stack-name }} \
+            --parameter-overrides file://cloudformation/parameters/${{ needs.setup.outputs.environment }}.json \
+            --capabilities CAPABILITY_IAM CAPABILITY_NAMED_IAM \
+            --no-fail-on-empty-changeset
+          
+          echo "✅ Stack deployment completed successfully!"
+
+      - name: Display stack outputs
+        run: |
+          echo "📄 Stack Outputs:"
+          echo "=================="
+          aws cloudformation describe-stacks \
+            --stack-name ${{ needs.setup.outputs.stack-name }} \
+            --query 'Stacks[0].Outputs' \
+            --output table
+
+  destroy:
+    runs-on: ubuntu-latest
+    needs: [setup, validate]
+    if: needs.setup.outputs.action == 'destroy'
+    environment: ${{ needs.setup.outputs.environment }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Confirm destruction
+        run: |
+          echo "⚠️  WARNING: You are about to destroy the following stack:"
+          echo "Stack Name: ${{ needs.setup.outputs.stack-name }}"
+          echo "Environment: ${{ needs.setup.outputs.environment }}"
+          echo ""
+          echo "This action cannot be undone!"
+
+      - name: Delete CloudFormation stack
+        run: |
+          echo "🗑️  Deleting CloudFormation stack..."
+          
+          if aws cloudformation describe-stacks --stack-name ${{ needs.setup.outputs.stack-name }} 2>/dev/null; then
+            aws cloudformation delete-stack --stack-name ${{ needs.setup.outputs.stack-name }}
+            
+            echo "⏳ Waiting for stack deletion to complete..."
+            aws cloudformation wait stack-delete-complete --stack-name ${{ needs.setup.outputs.stack-name }}
+            
+            echo "✅ Stack deleted successfully!"
+          else
+            echo "ℹ️  Stack does not exist, nothing to delete."
+          fi
+
+  cleanup:
+    runs-on: ubuntu-latest
+    needs: [setup, upload-templates, deploy, destroy]
+    if: always() && needs.upload-templates.result == 'success'
+    steps:
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Clean up templates bucket
+        run: |
+          echo "🧹 Cleaning up templates bucket..."
+          aws s3 rm s3://${{ needs.setup.outputs.templates-bucket }} --recursive || true
+          aws s3 rb s3://${{ needs.setup.outputs.templates-bucket }} || true
+          echo "✅ Cleanup completed!"

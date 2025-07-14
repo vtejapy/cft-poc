@@ -1,0 +1,246 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: 'Master CloudFormation template for deploying all infrastructure stacks'
+
+Parameters:
+  Environment:
+    Type: String
+    Default: dev
+    AllowedValues: [dev, stg, prod]
+    Description: Environment name
+
+  Region:
+    Type: String
+    Default: us-east-1
+    Description: AWS region for deployment
+
+  VpcCidr:
+    Type: String
+    Default: 10.113.0.0/16
+    Description: CIDR block for the VPC
+
+  Client:
+    Type: String
+    Default: gen-client5
+    Description: Client name
+
+  VpcName:
+    Type: String
+    Default: genpact-ccm
+    Description: Name tag for the VPC
+
+  PrivateCidrOffset:
+    Type: Number
+    Default: 10
+    Description: Starting offset for private subnet CIDR blocks
+
+  PublicCidrOffset:
+    Type: Number
+    Default: 20
+    Description: Starting offset for public subnet CIDR blocks
+
+  CostCenter:
+    Type: String
+    Default: '1003'
+    Description: Cost center for billing tags
+
+  CompanyName:
+    Type: String
+    Default: genpact
+    Description: Company name for tagging
+
+  BaseDomain:
+    Type: String
+    Default: genpactdemos.com
+    Description: Base domain name
+
+  ACMCertArn:
+    Type: String
+    Default: 5e44efe1-86d0-4bcd-b259-41ce929556c8
+    Description: ACM certificate ARN
+
+  # S3 Lifecycle Parameters
+  RecTransExpiration:
+    Type: Number
+    Default: 2555
+    Description: Recording transcripts expiration days
+
+  RecTransITTransition:
+    Type: Number
+    Default: 90
+    Description: Recording transcripts IT transition days
+
+  RecTransGlacierTransition:
+    Type: Number
+    Default: 365
+    Description: Recording transcripts Glacier transition days
+
+  AbortIncomplete:
+    Type: Number
+    Default: 7
+    Description: Abort incomplete multipart upload days
+
+  ExpReportsExpiration:
+    Type: Number
+    Default: 180
+    Description: Exported reports expiration days
+
+  ScreenRecExpiration:
+    Type: Number
+    Default: 60
+    Description: Screen recording expiration days
+
+  VoicemailExpiration:
+    Type: Number
+    Default: 30
+    Description: Voicemail expiration days
+
+  LexBotExpiration:
+    Type: Number
+    Default: 180
+    Description: Lex bot expiration days
+
+  BucketLoggingExpiration:
+    Type: Number
+    Default: 180
+    Description: Bucket logging expiration days
+
+  TemplatesBucketName:
+    Type: String
+    Description: S3 bucket containing CloudFormation templates
+    Default: cloudformation-templates-bucket
+
+  TemplatesPrefix:
+    Type: String
+    Description: S3 prefix for CloudFormation templates
+    Default: templates/
+
+Resources:
+  # Parameters Stack
+  ParametersStack:
+    Type: AWS::CloudFormation::Stack
+    Properties:
+      TemplateURL: !Sub 'https://${TemplatesBucketName}.s3.amazonaws.com/${TemplatesPrefix}parameters.yaml'
+      Parameters:
+        Environment: !Ref Environment
+        Region: !Ref Region
+        VpcCidr: !Ref VpcCidr
+        Client: !Ref Client
+        VpcName: !Ref VpcName
+        PrivateCidrOffset: !Ref PrivateCidrOffset
+        PublicCidrOffset: !Ref PublicCidrOffset
+        CostCenter: !Ref CostCenter
+        CompanyName: !Ref CompanyName
+        BaseDomain: !Ref BaseDomain
+        ACMCertArn: !Ref ACMCertArn
+        RecTransExpiration: !Ref RecTransExpiration
+        RecTransITTransition: !Ref RecTransITTransition
+        RecTransGlacierTransition: !Ref RecTransGlacierTransition
+        AbortIncomplete: !Ref AbortIncomplete
+        ExpReportsExpiration: !Ref ExpReportsExpiration
+        ScreenRecExpiration: !Ref ScreenRecExpiration
+        VoicemailExpiration: !Ref VoicemailExpiration
+        LexBotExpiration: !Ref LexBotExpiration
+        BucketLoggingExpiration: !Ref BucketLoggingExpiration
+      Tags:
+        - Key: StackType
+          Value: Parameters
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: Client
+          Value: !Ref Client
+        - Key: DeployedBy
+          Value: cloudformation
+
+  # VPC Stack
+  VPCStack:
+    Type: AWS::CloudFormation::Stack
+    DependsOn: ParametersStack
+    Properties:
+      TemplateURL: !Sub 'https://${TemplatesBucketName}.s3.amazonaws.com/${TemplatesPrefix}vpc.yaml'
+      Parameters:
+        ParametersStackName: !Ref ParametersStack
+      Tags:
+        - Key: StackType
+          Value: VPC
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: Client
+          Value: !Ref Client
+        - Key: DeployedBy
+          Value: cloudformation
+
+  # S3 Stack
+  S3Stack:
+    Type: AWS::CloudFormation::Stack
+    DependsOn: 
+      - ParametersStack
+      - VPCStack
+    Properties:
+      TemplateURL: !Sub 'https://${TemplatesBucketName}.s3.amazonaws.com/${TemplatesPrefix}s3.yaml'
+      Parameters:
+        ParametersStackName: !Ref ParametersStack
+        VPCStackName: !Ref VPCStack
+      Tags:
+        - Key: StackType
+          Value: S3
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: Client
+          Value: !Ref Client
+        - Key: DeployedBy
+          Value: cloudformation
+
+Outputs:
+  ParametersStackId:
+    Description: Parameters Stack ID
+    Value: !Ref ParametersStack
+    Export:
+      Name: !Sub '${AWS::StackName}-ParametersStack-ID'
+
+  VPCStackId:
+    Description: VPC Stack ID
+    Value: !Ref VPCStack
+    Export:
+      Name: !Sub '${AWS::StackName}-VPCStack-ID'
+
+  S3StackId:
+    Description: S3 Stack ID
+    Value: !Ref S3Stack
+    Export:
+      Name: !Sub '${AWS::StackName}-S3Stack-ID'
+
+  VPCId:
+    Description: VPC ID from VPC Stack
+    Value: !GetAtt VPCStack.Outputs.VPCId
+    Export:
+      Name: !Sub '${AWS::StackName}-VPC-ID'
+
+  PrivateSubnet1Id:
+    Description: Private Subnet 1 ID from VPC Stack
+    Value: !GetAtt VPCStack.Outputs.PrivateSubnet1Id
+    Export:
+      Name: !Sub '${AWS::StackName}-PrivateSubnet1-ID'
+
+  PrivateSubnet2Id:
+    Description: Private Subnet 2 ID from VPC Stack
+    Value: !GetAtt VPCStack.Outputs.PrivateSubnet2Id
+    Export:
+      Name: !Sub '${AWS::StackName}-PrivateSubnet2-ID'
+
+  PrivateSubnet3Id:
+    Description: Private Subnet 3 ID from VPC Stack
+    Value: !GetAtt VPCStack.Outputs.PrivateSubnet3Id
+    Export:
+      Name: !Sub '${AWS::StackName}-PrivateSubnet3-ID'
+
+  PublicSubnet1Id:
+    Description: Public Subnet 1 ID from VPC Stack
+    Value: !GetAtt VPCStack.Outputs.PublicSubnet1Id
+    Export:
+      Name: !Sub '${AWS::StackName}-PublicSubnet1-ID'
+
+  PublicSubnet2Id:
+    Description: Public Subnet 2 ID from VPC Stack
+    Value: !GetAtt VPCStack.Outputs.PublicSubnet2Id
+    Export:
+      Name: !Sub '${AWS::StackName}-PublicSubnet2-ID'
