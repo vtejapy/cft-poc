@@ -1,0 +1,53 @@
+FROM node:18-alpine
+
+# Install Python and required system dependencies
+RUN apk add --no-cache \
+    python3 \
+    py3-pip \
+    git \
+    bash \
+    curl \
+    jq
+
+# Install AWS CLI
+RUN pip3 install awscli
+
+# Install AWS CDK
+RUN npm install -g aws-cdk
+
+# Create working directory
+WORKDIR /app
+
+# Copy CDK app files
+COPY cdk-app/ ./
+
+# Install CDK app dependencies
+RUN npm install
+
+# Create entrypoint script
+RUN echo '#!/bin/bash' > /entrypoint.sh && \
+    echo 'set -e' >> /entrypoint.sh && \
+    echo '' >> /entrypoint.sh && \
+    echo '# Check AWS credentials' >> /entrypoint.sh && \
+    echo 'if [ -z "$AWS_ACCESS_KEY_ID" ] || [ -z "$AWS_SECRET_ACCESS_KEY" ]; then' >> /entrypoint.sh && \
+    echo '    echo "Error: AWS credentials not set. Please set AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY"' >> /entrypoint.sh && \
+    echo '    exit 1' >> /entrypoint.sh && \
+    echo 'fi' >> /entrypoint.sh && \
+    echo '' >> /entrypoint.sh && \
+    echo '# Set AWS region if not provided' >> /entrypoint.sh && \
+    echo 'export AWS_REGION=${AWS_REGION:-us-east-1}' >> /entrypoint.sh && \
+    echo '' >> /entrypoint.sh && \
+    echo '# Bootstrap CDK (required for first-time deployment)' >> /entrypoint.sh && \
+    echo 'echo "Bootstrapping CDK..."' >> /entrypoint.sh && \
+    echo 'cdk bootstrap' >> /entrypoint.sh && \
+    echo '' >> /entrypoint.sh && \
+    echo '# Deploy the stack' >> /entrypoint.sh && \
+    echo 'echo "Deploying AWS infrastructure..."' >> /entrypoint.sh && \
+    echo 'cdk deploy --all --require-approval never' >> /entrypoint.sh && \
+    echo '' >> /entrypoint.sh && \
+    echo '# Output the deployed resources' >> /entrypoint.sh && \
+    echo 'echo "Deployment complete! Resources created:"' >> /entrypoint.sh && \
+    echo 'cdk list' >> /entrypoint.sh && \
+    chmod +x /entrypoint.sh
+
+ENTRYPOINT ["/entrypoint.sh"]

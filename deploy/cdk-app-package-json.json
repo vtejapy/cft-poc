@@ -1,0 +1,19 @@
+{
+  "name": "aws-serverless-infrastructure",
+  "version": "1.0.0",
+  "description": "AWS Infrastructure for Serverless Application",
+  "main": "index.js",
+  "scripts": {
+    "build": "tsc",
+    "watch": "tsc -w",
+    "cdk": "cdk"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "typescript": "~5.0.0"
+  },
+  "dependencies": {
+    "aws-cdk-lib": "^2.100.0",
+    "constructs": "^10.0.0"
+  }
+}

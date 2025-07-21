@@ -1,0 +1,15 @@
+version: '3.8'
+
+services:
+  aws-deployer:
+    build: .
+    image: aws-infrastructure-deployer
+    environment:
+      - AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID}
+      - AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY}
+      - AWS_REGION=${AWS_REGION:-us-east-1}
+    volumes:
+      # Optional: Mount local directory for CDK outputs
+      - ./cdk-outputs:/app/cdk.out
+    stdin_open: true
+    tty: true
